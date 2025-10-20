@@ -35,10 +35,10 @@ var OwnerBtn = telegram.Button.Data("Oᴡɴᴇʀ Cᴏᴍᴍᴀɴᴅꜱ", "help_o
 var DevsBtn = telegram.Button.Data("Dᴇᴠꜱ Cᴏᴍᴍᴀɴᴅꜱ", "help_devs")
 
 // ChannelBtn is a button that links to the updates channel.
-var ChannelBtn = telegram.Button.URL("ᴜᴘᴅᴀᴛᴇꜱ", "https://t.me/FallenProjects")
+var ChannelBtn = telegram.Button.URL("ᴜᴘᴅᴀᴛᴇꜱ", "https://t.me/BillaSpace")
 
 // GroupBtn is a button that links to the support group.
-var GroupBtn = telegram.Button.URL("ꜱᴜᴘᴘᴏʀᴛ", "https://t.me/GuardxSupport")
+var GroupBtn = telegram.Button.URL("ꜱᴜᴘᴘᴏʀᴛ", "https://t.me/BillaCore")
 
 // SourceCodeBtn is a button that links to the source code.
 var SourceCodeBtn = telegram.Button.URL("Sᴏᴜʀᴄᴇ Cᴏᴅᴇ", "https://github.com/AshokShau/TgMusicBot")
@@ -113,8 +113,8 @@ func ControlButtons(mode string) *telegram.ReplyInlineMarkup {
 	stopBtn := telegram.Button.Data("▢", "play_stop")
 	pauseBtn := telegram.Button.Data("II", "play_pause")
 	resumeBtn := telegram.Button.Data("▷", "play_resume")
-	muteBtn := telegram.Button.Data("🔇", "play_mute")
-	unmuteBtn := telegram.Button.Data("🔊", "play_unmute")
+	muteBtn := telegram.Button.Data("ヤ", "play_mute")
+	unmuteBtn := telegram.Button.Data("🎙️", "play_unmute")
 
 	var keyboard *telegram.KeyboardBuilder
 
@@ -156,7 +156,7 @@ func LanguageKeyboard() *telegram.ReplyInlineMarkup {
 // AddMeMarkup creates and returns an inline keyboard with a button that allows users to add the bot to their group.
 // It requires the bot's username to generate the correct link.
 func AddMeMarkup(username string) *telegram.ReplyInlineMarkup {
-	addMeBtn := telegram.Button.URL(fmt.Sprintf("Aᴅᴅ ᴍᴇ ᴛᴏ ʏᴏᴜʀ ɢʀᴏᴜᴘ"), fmt.Sprintf("https://t.me/%s?startgroup=true", username))
+	addMeBtn := telegram.Button.URL(fmt.Sprintf("Aᴅᴅ ᴍᴇ ➕"), fmt.Sprintf("https://t.me/%s?startgroup=true", username))
 
 	keyboard := telegram.NewKeyboard().
 		AddRow(addMeBtn).
