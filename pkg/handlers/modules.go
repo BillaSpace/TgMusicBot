@@ -20,7 +20,7 @@ func LoadModules(c *telegram.Client) {
 	c.On("command:lang", langHandler)
 	c.On("command:reload", reloadAdminCacheHandler)
 	c.On("command:privacy", privacyHandler)
-c.On("command:broadcast", broadcastHandler, telegram.FilterFunc(isDev)) // Added broadcast handler
+    c.On("command:broadcast", broadcastHandler, telegram.FilterFunc(isDev))
 
 	c.On("command:play", playHandler, telegram.FilterFunc(playMode))
 	c.On("command:vPlay", vPlayHandler, telegram.FilterFunc(playMode))
