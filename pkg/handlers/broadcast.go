@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/BillaSpace/TgMusicBot/pkg/core/db"
+	"github.com/AshokShau/TgMusicBot/pkg/core/db"
 	"github.com/amarnathcjd/gogram/telegram"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
