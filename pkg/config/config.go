@@ -1,3 +1,11 @@
+/*
+ * TgMusicBot - Telegram Music Bot
+ *  Copyright (c) 2025 Ashok Shau
+ *
+ *  Licensed under GNU GPL v3
+ *  See https://github.com/AshokShau/TgMusicBot
+ */
+
 package config
 
 import (
@@ -15,7 +23,8 @@ type BotConfig struct {
 	ApiId          int32    // ApiId is the Telegram API ID.
 	ApiHash        string   // ApiHash is the Telegram API hash.
 	Token          string   // Token is the bot token.
-	SessionStrings []string // SessionStrings is a list of pyrogram session strings.
+	SessionStrings []string // SessionStrings is a list of pyrogram/telethon/gogram session strings.
+	SessionType    string   // SessionType is the type of session (pyrogram/telethon/gogram).
 	MongoUri       string   // MongoUri is the MongoDB connection string.
 	DbName         string   // DbName is the name of the database.
 	ApiUrl         string   // ApiUrl is the URL of the API.
@@ -48,6 +57,7 @@ func LoadConfig() error {
 		ApiHash:        os.Getenv("API_HASH"),
 		Token:          os.Getenv("TOKEN"),
 		SessionStrings: getSessionStrings("STRING", 10),
+		SessionType:    getEnvStr("SESSION_TYPE", "pyrogram"),
 		MongoUri:       os.Getenv("MONGO_URI"),
 		DbName:         getEnvStr("DB_NAME", "MusicBot"),
 		ApiUrl:         getEnvStr("API_URL", "https://tgmusic.fallenapi.fun"),

@@ -1,3 +1,11 @@
+/*
+ * TgMusicBot - Telegram Music Bot
+ *  Copyright (c) 2025 Ashok Shau
+ *
+ *  Licensed under GNU GPL v3
+ *  See https://github.com/AshokShau/TgMusicBot
+ */
+
 package db
 
 import (
@@ -8,6 +16,8 @@ import (
 	"github.com/Laky-64/gologging"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
+
+var ctxBg = context.Background()
 
 // toKey converts an int64 ID into a string format suitable for use as a cache key.
 func toKey(id int64) string {
@@ -82,5 +92,5 @@ func remove(list []int64, id int64) []int64 {
 // Ctx creates a new context with a default timeout of 5 seconds.
 // It returns the context and a cancel function to release resources.
 func Ctx() (context.Context, context.CancelFunc) {
-	return context.WithTimeout(context.Background(), 5*time.Second)
+	return context.WithTimeout(ctxBg, 5*time.Second)
 }

@@ -1,3 +1,11 @@
+/*
+ * TgMusicBot - Telegram Music Bot
+ *  Copyright (c) 2025 Ashok Shau
+ *
+ *  Licensed under GNU GPL v3
+ *  See https://github.com/AshokShau/TgMusicBot
+ */
+
 package handlers
 
 import (
@@ -47,6 +55,9 @@ func LoadModules(c *telegram.Client) {
 	c.On("command:active_vc", activeVcHandler, telegram.FilterFunc(isDev))
 	c.On("command:av", activeVcHandler, telegram.FilterFunc(isDev))
 	c.On("command:stats", sysStatsHandler, telegram.FilterFunc(isDev))
+	c.On("command:clear_assistants", clearAssistantsHandler, telegram.FilterFunc(isDev))
+	c.On("command:clearAss", clearAssistantsHandler, telegram.FilterFunc(isDev))
+	c.On("command:leaveAll", leaveAllHandler, telegram.FilterFunc(isDev))
 
 	c.On("command:settings", settingsHandler, telegram.FilterFunc(adminMode))
 	c.On("callback:play_\\w+", playCallbackHandler, telegram.FilterFuncCallback(adminModeCB))

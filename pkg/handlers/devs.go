@@ -1,3 +1,11 @@
+/*
+ * TgMusicBot - Telegram Music Bot
+ *  Copyright (c) 2025 Ashok Shau
+ *
+ *  Licensed under GNU GPL v3
+ *  See https://github.com/AshokShau/TgMusicBot
+ */
+
 package handlers
 
 import (
@@ -7,7 +15,7 @@ import (
 	"github.com/AshokShau/TgMusicBot/pkg/core/cache"
 	"github.com/AshokShau/TgMusicBot/pkg/core/db"
 	"github.com/AshokShau/TgMusicBot/pkg/lang"
-
+	"github.com/AshokShau/TgMusicBot/pkg/vc"
 	"github.com/amarnathcjd/gogram/telegram"
 )
 
@@ -63,4 +71,43 @@ func activeVcHandler(m *telegram.NewMessage) error {
 	}
 
 	return nil
+}
+
+// Handles the /clearass command to remove all assistant assignments
+func clearAssistantsHandler(m *telegram.NewMessage) error {
+	chatID, _ := getPeerId(m.Client, m.ChatID())
+	ctx, cancel := db.Ctx()
+	defer cancel()
+	langCode := db.Instance.GetLang(ctx, chatID)
+
+	done, err := db.Instance.ClearAllAssistants(ctx)
+	if err != nil {
+		_, _ = m.Reply(fmt.Sprintf(lang.GetString(langCode, "clear_assistants_error"), err.Error()))
+		return err
+	}
+
+	_, err = m.Reply(fmt.Sprintf(lang.GetString(langCode, "clear_assistants_success"), done))
+	return err
+}
+
+// Handles the /leaveall command to leave all chats
+func leaveAllHandler(m *telegram.NewMessage) error {
+	chatID, _ := getPeerId(m.Client, m.ChatID())
+	ctx, cancel := db.Ctx()
+	defer cancel()
+	langCode := db.Instance.GetLang(ctx, chatID)
+
+	reply, err := m.Reply(lang.GetString(langCode, "leave_all_start"))
+	if err != nil {
+		return err
+	}
+
+	leftCount, err := vc.Calls.LeaveAll()
+	if err != nil {
+		_, _ = reply.Edit(fmt.Sprintf(lang.GetString(langCode, "leave_all_error"), err.Error()))
+		return err
+	}
+
+	_, err = reply.Edit(fmt.Sprintf(lang.GetString(langCode, "leave_all_success"), leftCount))
+	return err
 }
