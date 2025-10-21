@@ -9,7 +9,6 @@ import (
 
 	"github.com/AshokShau/TgMusicBot/pkg/core/db"
 	"github.com/amarnathcjd/gogram/telegram"
-	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 const broadcastUsage = `⚠️ Usage: <code>/broadcast [all|users|chats] [copy]</code>
@@ -117,7 +116,6 @@ func broadcastHandler(m *telegram.NewMessage) error {
 		defer mu.Unlock()
 
 		if err != nil {
-			// skip invalid chats/users silently
 			if isChat {
 				chatFailed++
 			} else {
@@ -132,7 +130,6 @@ func broadcastHandler(m *telegram.NewMessage) error {
 		}
 		sentCount++
 
-		// update progress every 20 messages or at the end
 		if sentCount%20 == 0 || sentCount == totalTargets {
 			progress := fmt.Sprintf(
 				"📢 Broadcast in progress (%s mode)...\n\n👤 Users: ✅ %d | ❌ %d\n🏢 Chats: ✅ %d | ❌ %d\n\nSent %d/%d",
@@ -156,7 +153,6 @@ func broadcastHandler(m *telegram.NewMessage) error {
 
 	wg.Wait()
 
-	// --- Final result ---
 	finalMsg := fmt.Sprintf(
 		"📢 Broadcast completed!\n\n👤 Users: ✅ %d | ❌ %d\n🏢 Chats: ✅ %d | ❌ %d",
 		userSuccess, userFailed,
@@ -166,49 +162,12 @@ func broadcastHandler(m *telegram.NewMessage) error {
 	return nil
 }
 
-// --- Helpers to safely decode IDs from MongoDB ---
+// --- Safe database fetch helpers (fixed) ---
 
 func getAllChatsSafe(ctx context.Context) ([]int64, error) {
-	cursor, err := db.Instance.ChatDB.Find(ctx, map[string]interface{}{})
-	if err != nil {
-		return nil, err
-	}
-	defer cursor.Close(ctx)
-
-	var ids []int64
-	for cursor.Next(ctx) {
-		var raw map[string]interface{}
-		if err := cursor.Decode(&raw); err != nil {
-			continue
-		}
-		if id, ok := raw["_id"].(int64); ok {
-			ids = append(ids, id)
-		} else if oid, ok := raw["_id"].(primitive.ObjectID); ok {
-			// fallback: convert ObjectID timestamp as int64
-			ids = append(ids, int64(oid.Timestamp().Unix()))
-		}
-	}
-	return ids, nil
+	return db.Instance.GetAllChats(ctx)
 }
 
 func getAllUsersSafe(ctx context.Context) ([]int64, error) {
-	cursor, err := db.Instance.UserDB.Find(ctx, map[string]interface{}{})
-	if err != nil {
-		return nil, err
-	}
-	defer cursor.Close(ctx)
-
-	var ids []int64
-	for cursor.Next(ctx) {
-		var raw map[string]interface{}
-		if err := cursor.Decode(&raw); err != nil {
-			continue
-		}
-		if id, ok := raw["_id"].(int64); ok {
-			ids = append(ids, id)
-		} else if oid, ok := raw["_id"].(primitive.ObjectID); ok {
-			ids = append(ids, int64(oid.Timestamp().Unix()))
-		}
-	}
-	return ids, nil
+	return db.Instance.GetAllUsers(ctx)
 }
