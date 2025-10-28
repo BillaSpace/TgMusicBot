@@ -21,23 +21,28 @@ import (
 // sendLogger sends a formatted log message to the designated logger chat.
 // It includes details about the song being played, such as its title, duration, and the user who requested it.
 func sendLogger(client *tg.Client, chatID int64, song *cache.CachedTrack) {
-	if chatID == 0 || song == nil || chatID == config.Conf.LoggerId {
+	if chatID == 0 || song == nil {
 		return
 	}
 
 	text := fmt.Sprintf(
 		"<b>A song is playing</b> in <code>%d</code>\n\n‣ <b>Title:</b> <a href='%s'>%s</a>\n‣ <b>Duration:</b> %s\n‣ <b>Requested by:</b> %s\n‣ <b>Platform:</b> %s\n‣ <b>Is Video:</b> %t",
 		chatID,
-		song.URL,
-		song.Name,
+		html.EscapeString(song.URL),
+		html.EscapeString(song.Name),
 		cache.SecToMin(song.Duration),
-		song.User,
-		song.Platform,
+		html.EscapeString(song.User),
+		html.EscapeString(song.Platform),
 		song.IsVideo,
 	)
 
-	_, err := client.SendMessage(config.Conf.LoggerId, text, &tg.SendOptions{LinkPreview: false})
+	_, err := client.SendMessage(config.Conf.LoggerId, text, &tg.SendOptions{
+		ParseMode:   tg.ModeHTML,
+		LinkPreview: false,
+	})
 	if err != nil {
-		gologging.WarnF("[sendLogger] Failed to send the message: %v", err)
+		gologging.WarnF("[sendLogger] Failed to send the message to %d: %v", config.Conf.LoggerId, err)
+	} else {
+		gologging.InfoF("[sendLogger] Sent log message for chat %d", chatID)
 	}
 }
