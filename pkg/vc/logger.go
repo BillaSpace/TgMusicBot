@@ -10,6 +10,7 @@ package vc
 
 import (
 	"fmt"
+	"html" // for html.EscapeString
 
 	"github.com/AshokShau/TgMusicBot/pkg/config"
 	"github.com/AshokShau/TgMusicBot/pkg/core/cache"
@@ -37,7 +38,7 @@ func sendLogger(client *tg.Client, chatID int64, song *cache.CachedTrack) {
 	)
 
 	_, err := client.SendMessage(config.Conf.LoggerId, text, &tg.SendOptions{
-		ParseMode:   tg.ModeHTML,
+		ParseMode:   tg.HTML, // correct constant name in gogram
 		LinkPreview: false,
 	})
 	if err != nil {
