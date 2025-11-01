@@ -56,6 +56,12 @@ The guide provides comprehensive instructions for deploying the bot using:
 - **🐳 Docker (Recommended)**
 - **🔧 Manual Installation (Linux, macOS, and Windows)**
 
+### 🚀 Deploy to Heroku
+
+You can also deploy this bot to Heroku.
+
+[![Deploy](https://img.shields.io/badge/Deploy%20On%20Heroku-black?style=for-the-badge&logo=heroku)](https://heroku.com/deploy?template=https://github.com/AshokShau/TgMusicBot)
+
 ---
 
 <div align="center">
