@@ -42,8 +42,7 @@ func (c *TelegramCalls) LeaveAll() (int, error) {
 		}
 
 		for _, d := range dialogs {
-			dialog := d.(*telegram.DialogObj)
-			peer := dialog.Peer
+			peer := d.Peer
 			var chatID int64
 			switch p := peer.(type) {
 			case *telegram.PeerChannel:
