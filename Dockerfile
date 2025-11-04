@@ -30,6 +30,7 @@ RUN apt-get update && apt-get install -y \
 WORKDIR /app
 
 COPY --from=builder /app/myapp /app/
+COPY --from=builder /app/locales /app/locales
 
 RUN chmod +x /app/myapp
 
