@@ -45,13 +45,13 @@ func GetAdmins(client *telegram.Client, chatID int64, forceReload bool) ([]*tele
 	}
 
 	opts := &telegram.ParticipantOptions{
-		Filter:           &telegram.ChannelParticipantsAdmins{},
-		SleepThresholdMs: 3000,
-		Limit:            -1,
+		Filter: &telegram.ChannelParticipantsAdmins{},
+		Limit:  -1,
 	}
 
 	admins, _, err := client.GetChatMembers(chatID, opts)
 	if err != nil {
+		gologging.WarnF("GetAdmins error: %v", err)
 		return nil, err
 	}
 
