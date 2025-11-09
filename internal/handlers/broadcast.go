@@ -18,9 +18,9 @@ import (
 
 	"github.com/AshokShau/TgMusicBot/internal/core/db"
 	"github.com/amarnathcjd/gogram/telegram"
-	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/bson/primitive"
-	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/v2/bson"
+	"go.mongodb.org/mongo-driver/v2/mongo"
+	"go.mongodb.org/mongo-driver/v2/mongo/options"
 )
 
 const broadcastUsage = `⚠️ Usage: <code>/broadcast [all|users|chats] [copy]</code>
@@ -114,6 +114,7 @@ func broadcastHandler(m *telegram.NewMessage) error {
 	chatOK, chatFail := 0, 0
 	sent := 0
 
+	// modest concurrency to avoid floodwaits
 	sem := make(chan struct{}, 12)
 	var wg sync.WaitGroup
 
@@ -172,21 +173,19 @@ func broadcastHandler(m *telegram.NewMessage) error {
 	return nil
 }
 
-// ---- local safe getters (decode ObjectID by checking common ID fields) ----
+// ---- local safe getters (handle mixed _id types and legacy docs) ----
 
 func getAllChatsSafe(ctx context.Context) ([]int64, error) {
 	coll := db.Instance.DB.Collection("chats")
-	// Only fetch id-looking fields to reduce payload
-	cur, err := coll.Find(ctx, bson.M{}, &mongo.FindOptions{
-		Projection: bson.M{
-			"_id":     1,
-			"chat_id": 1, "id": 1, "tg_id": 1, "peer_id": 1,
-		},
+	opts := options.Find().SetProjection(bson.M{
+		"_id":     1,
+		"chat_id": 1, "id": 1, "tg_id": 1, "peer_id": 1,
 	})
+	cur, err := coll.Find(ctx, bson.M{}, opts)
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = cur.Close(ctx) }()
+	defer func(cur *mongo.Cursor, ctx context.Context) { _ = cur.Close(ctx) }(cur, ctx)
 
 	var ids []int64
 	for cur.Next(ctx) {
@@ -206,16 +205,15 @@ func getAllChatsSafe(ctx context.Context) ([]int64, error) {
 
 func getAllUsersSafe(ctx context.Context) ([]int64, error) {
 	coll := db.Instance.DB.Collection("users")
-	cur, err := coll.Find(ctx, bson.M{}, &mongo.FindOptions{
-		Projection: bson.M{
-			"_id":     1,
-			"user_id": 1, "id": 1, "tg_id": 1,
-		},
+	opts := options.Find().SetProjection(bson.M{
+		"_id":     1,
+		"user_id": 1, "id": 1, "tg_id": 1,
 	})
+	cur, err := coll.Find(ctx, bson.M{}, opts)
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = cur.Close(ctx) }()
+	defer func(cur *mongo.Cursor, ctx context.Context) { _ = cur.Close(ctx) }(cur, ctx)
 
 	var ids []int64
 	for cur.Next(ctx) {
@@ -235,23 +233,17 @@ func getAllUsersSafe(ctx context.Context) ([]int64, error) {
 
 // extractNumericID returns a usable Telegram ID, handling multiple shapes:
 // 1) Numeric/string _id directly
-// 2) _id is ObjectID -> try fields: chat_id, user_id, id, tg_id, peer_id
+// 2) _id is non-numeric -> try fields: chat_id, user_id, id, tg_id, peer_id
+// 3) fallback to embedded "chat.id" / "user.id" if present
 func extractNumericID(doc bson.M) (int64, bool) {
-	// Fast path: _id already numeric or numeric-string
 	if id, ok := toInt64(doc["_id"]); ok {
 		return id, true
 	}
-	// ObjectID or other -> check common fields
 	candidates := []string{"chat_id", "user_id", "id", "tg_id", "peer_id"}
 	for _, k := range candidates {
 		if id, ok := toInt64(doc[k]); ok {
 			return id, true
 		}
-	}
-	// As a last resort, if _id is ObjectID and there’s an embedded "chat" or "user" map with "id"
-	switch t := doc["_id"].(type) {
-	case primitive.ObjectID:
-		_ = t // just to acknowledge
 	}
 	if embedded, ok := doc["chat"].(bson.M); ok {
 		if id, ok := toInt64(embedded["id"]); ok {
@@ -278,8 +270,6 @@ func toInt64(v any) (int64, bool) {
 		if n, err := strconv.ParseInt(strings.TrimSpace(t), 10, 64); err == nil {
 			return n, true
 		}
-	default:
-		// primitive.ObjectID and others are not directly convertible
 	}
 	return 0, false
 }
