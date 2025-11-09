@@ -39,10 +39,10 @@ var OwnerBtn = telegram.Button.Data("Oᴡɴᴇʀ Cᴏᴍᴍᴀɴᴅꜱ", "help_o
 var DevsBtn = telegram.Button.Data("Dᴇᴠꜱ Cᴏᴍᴍᴀɴᴅꜱ", "help_devs")
 
 // ChannelBtn is a button that links to the updates channel.
-var ChannelBtn = telegram.Button.URL("ᴜᴘᴅᴀᴛᴇꜱ", "https://t.me/FallenProjects")
+var ChannelBtn = telegram.Button.URL("ᴜᴘᴅᴀᴛᴇꜱ", "https://t.me/BillaSpace")
 
 // GroupBtn is a button that links to the support group.
-var GroupBtn = telegram.Button.URL("ꜱᴜᴘᴘᴏʀᴛ", "https://t.me/GuardxSupport")
+var GroupBtn = telegram.Button.URL("ꜱᴜᴘᴘᴏʀᴛ", "https://t.me/BillaCore")
 
 // SourceCodeBtn is a button that links to the source code.
 var SourceCodeBtn = telegram.Button.URL("Sᴏᴜʀᴄᴇ Cᴏᴅᴇ", "https://github.com/AshokShau/TgMusicBot")
