@@ -166,6 +166,22 @@ func (y *YouTubeData) GetTrack(ctx context.Context) (cache.TrackInfo, error) {
 	return trackInfo, nil
 }
 
+// Build  URL in exact order expected by API
+func (y *YouTubeData) buildWorkerURL(videoID string, audio bool, format string) string {
+	base := strings.TrimRight(strings.TrimSpace(y.ApiUrl), "/")
+	if base == "" {
+		return ""
+	}
+	q := "id=" + url.QueryEscape(videoID)
+	if audio {
+		q += "&type=audio"
+		if format != "" {
+			q += "&format=" + url.QueryEscape(format)
+		}
+	}
+	return base + "/yt?" + q
+}
+
 func (y *YouTubeData) BuildYtdlpParams(videoID string, video bool) []string {
 	outputTemplate := filepath.Join(config.Conf.DownloadsDir, "%(id)s.%(ext)s")
 
@@ -246,54 +262,41 @@ func (y *YouTubeData) downloadTrack(ctx context.Context, info cache.TrackInfo, v
 		return "", errors.New("missing YouTube video ID")
 	}
 
-	base := strings.TrimRight(strings.TrimSpace(y.ApiUrl), "/")
-	if base != "" {
-		if video {
-			watchURL := "https://www.youtube.com/watch?v=" + videoID
-			apiURL := base + "/yt?" + url.Values{"url": {watchURL}}.Encode()
+	if y.ApiUrl != "" {
+		type respJSON struct {
+			Success     bool   `json:"success"`
+			DownloadURL string `json:"download_url"`
+			Credit      string `json:"credit"`
+		}
 
+		callWorker := func(apiURL string, fallbackExt string) (string, error) {
 			resp, err := sendRequest(ctx, http.MethodGet, apiURL, nil, nil)
-			if err == nil {
-				defer resp.Body.Close()
-				if resp.StatusCode == http.StatusOK {
-					var data struct {
-						Success     bool   `json:"success"`
-						DownloadURL string `json:"download_url"`
-						Credit      string `json:"credit"`
-					}
-					if json.NewDecoder(resp.Body).Decode(&data) == nil && data.Success && data.DownloadURL != "" {
-						ext := pickExtFromURL(data.DownloadURL, ".mp4")
-						target := filepath.Join(config.Conf.DownloadsDir, fmt.Sprintf("%s%s", videoID, ext))
-						if path, derr := DownloadFile(ctx, data.DownloadURL, target, false); derr == nil {
-							return path, nil
-						}
-					}
-				}
+			if err != nil {
+				return "", err
+			}
+			defer resp.Body.Close()
+			if resp.StatusCode != http.StatusOK {
+				return "", fmt.Errorf("api returned status %d", resp.StatusCode)
+			}
+			var data respJSON
+			if json.NewDecoder(resp.Body).Decode(&data) != nil || !data.Success || data.DownloadURL == "" {
+				return "", errors.New("api response invalid")
+			}
+			ext := pickExtFromURL(data.DownloadURL, fallbackExt)
+			target := filepath.Join(config.Conf.DownloadsDir, fmt.Sprintf("%s%s", videoID, ext))
+			return DownloadFile(ctx, data.DownloadURL, target, false)
+		}
+
+		if video {
+			if path, err := callWorker(y.buildWorkerURL(videoID, false, ""), ".mp4"); err == nil {
+				return path, nil
 			}
 		} else {
-			apiURL := base + "/yt?" + url.Values{
-				"id":     {videoID},
-				"type":   {"audio"},
-				"format": {"m4a"},
-			}.Encode()
-
-			resp, err := sendRequest(ctx, http.MethodGet, apiURL, nil, nil)
-			if err == nil {
-				defer resp.Body.Close()
-				if resp.StatusCode == http.StatusOK {
-					var data struct {
-						Success     bool   `json:"success"`
-						DownloadURL string `json:"download_url"`
-						Credit      string `json:"credit"`
-					}
-					if json.NewDecoder(resp.Body).Decode(&data) == nil && data.Success && data.DownloadURL != "" {
-						ext := pickExtFromURL(data.DownloadURL, ".m4a")
-						target := filepath.Join(config.Conf.DownloadsDir, fmt.Sprintf("%s%s", videoID, ext))
-						if path, derr := DownloadFile(ctx, data.DownloadURL, target, false); derr == nil {
-							return path, nil
-						}
-					}
-				}
+			if path, err := callWorker(y.buildWorkerURL(videoID, true, "m4a"), ".m4a"); err == nil {
+				return path, nil
+			}
+			if path, err := callWorker(y.buildWorkerURL(videoID, true, "mp3"), ".mp3"); err == nil {
+				return path, nil
 			}
 		}
 	}
