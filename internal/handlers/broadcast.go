@@ -18,9 +18,9 @@ import (
 
 	"github.com/AshokShau/TgMusicBot/internal/core/db"
 	"github.com/amarnathcjd/gogram/telegram"
-	"go.mongodb.org/mongo-driver/v2/bson"
-	"go.mongodb.org/mongo-driver/v2/bson/primitive"
-	"go.mongodb.org/mongo-driver/v2/mongo"
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
+	"go.mongodb.org/mongo-driver/mongo"
 )
 
 const broadcastUsage = `⚠️ Usage: <code>/broadcast [all|users|chats] [copy]</code>
