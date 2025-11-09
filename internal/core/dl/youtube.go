@@ -27,7 +27,6 @@ import (
 	"github.com/AshokShau/TgMusicBot/internal/core/cache"
 )
 
-// YouTubeData provides an interface for fetching track and playlist information from YouTube.
 type YouTubeData struct {
 	Query    string
 	ApiUrl   string
@@ -41,24 +40,21 @@ var youtubePatterns = map[string]*regexp.Regexp{
 	"yt_shorts": regexp.MustCompile(`^(?:https?://)?(?:www\.)?youtube\.com/shorts/([\w-]{11})(?:[?#].*)?$`),
 }
 
-// NewYouTubeData initializes a YouTubeData instance with pre-compiled regex patterns and a cleaned query.
 func NewYouTubeData(query string) *YouTubeData {
 	return &YouTubeData{
 		Query:    clearQuery(query),
 		ApiUrl:   strings.TrimRight(config.Conf.ApiUrl, "/"),
-		APIKey:   "", // not used anymore
+		APIKey:   "",
 		Patterns: youtubePatterns,
 	}
 }
 
-// clearQuery removes extraneous URL parameters and fragments from a given query string.
 func clearQuery(query string) string {
 	query = strings.SplitN(query, "#", 2)[0]
 	query = strings.SplitN(query, "&", 2)[0]
 	return strings.TrimSpace(query)
 }
 
-// normalizeYouTubeURL converts various YouTube URL formats (e.g., youtu.be, shorts) into a standard watch URL.
 func (y *YouTubeData) normalizeYouTubeURL(u string) string {
 	var videoID string
 	switch {
@@ -74,7 +70,6 @@ func (y *YouTubeData) normalizeYouTubeURL(u string) string {
 	return "https://www.youtube.com/watch?v=" + videoID
 }
 
-// extractVideoID parses a YouTube URL and extracts the video ID.
 func (y *YouTubeData) extractVideoID(u string) string {
 	u = y.normalizeYouTubeURL(u)
 	for _, pattern := range y.Patterns {
@@ -85,7 +80,6 @@ func (y *YouTubeData) extractVideoID(u string) string {
 	return ""
 }
 
-// IsValid checks if the query string matches any of the known YouTube URL patterns.
 func (y *YouTubeData) IsValid() bool {
 	if y.Query == "" {
 		log.Println("The query or patterns are empty.")
@@ -99,7 +93,6 @@ func (y *YouTubeData) IsValid() bool {
 	return false
 }
 
-// GetInfo retrieves metadata for a track from YouTube.
 func (y *YouTubeData) GetInfo(ctx context.Context) (cache.PlatformTracks, error) {
 	if !y.IsValid() {
 		return cache.PlatformTracks{}, errors.New("the provided URL is invalid or the platform is not supported")
@@ -125,7 +118,6 @@ func (y *YouTubeData) GetInfo(ctx context.Context) (cache.PlatformTracks, error)
 	return cache.PlatformTracks{}, errors.New("no video results were found")
 }
 
-// Search performs a search for a track on YouTube.
 func (y *YouTubeData) Search(ctx context.Context) (cache.PlatformTracks, error) {
 	tracks, err := searchYouTube(y.Query)
 	if err != nil {
@@ -137,7 +129,6 @@ func (y *YouTubeData) Search(ctx context.Context) (cache.PlatformTracks, error) 
 	return cache.PlatformTracks{Results: tracks}, nil
 }
 
-// GetTrack retrieves detailed information for a single track.
 func (y *YouTubeData) GetTrack(ctx context.Context) (cache.TrackInfo, error) {
 	if y.Query == "" {
 		return cache.TrackInfo{}, errors.New("the query is empty")
@@ -146,7 +137,6 @@ func (y *YouTubeData) GetTrack(ctx context.Context) (cache.TrackInfo, error) {
 		return cache.TrackInfo{}, errors.New("the provided URL is invalid or the platform is not supported")
 	}
 
-	// Try external API metadata if configured (no API key required anymore)
 	if y.ApiUrl != "" {
 		if trackInfo, err := NewApiData(y.Query).GetTrack(ctx); err == nil {
 			return trackInfo, nil
@@ -176,7 +166,6 @@ func (y *YouTubeData) GetTrack(ctx context.Context) (cache.TrackInfo, error) {
 	return trackInfo, nil
 }
 
-// BuildYtdlpParams constructs the command-line parameters for yt-dlp to download media.
 func (y *YouTubeData) BuildYtdlpParams(videoID string, video bool) []string {
 	outputTemplate := filepath.Join(config.Conf.DownloadsDir, "%(id)s.%(ext)s")
 
@@ -220,7 +209,6 @@ func (y *YouTubeData) BuildYtdlpParams(videoID string, video bool) []string {
 	return params
 }
 
-// downloadWithYtDlp downloads media from YouTube using the yt-dlp command-line tool.
 func (y *YouTubeData) downloadWithYtDlp(ctx context.Context, videoID string, video bool) (string, error) {
 	ytdlpParams := y.BuildYtdlpParams(videoID, video)
 	cmd := exec.CommandContext(ctx, ytdlpParams[0], ytdlpParams[1:]...)
@@ -249,7 +237,6 @@ func (y *YouTubeData) downloadWithYtDlp(ctx context.Context, videoID string, vid
 	return downloadedPathStr, nil
 }
 
-// downloadTrack downloads via API, falling back to yt-dlp on error.
 func (y *YouTubeData) downloadTrack(ctx context.Context, info cache.TrackInfo, video bool) (string, error) {
 	videoID := info.TC
 	if videoID == "" {
@@ -259,16 +246,28 @@ func (y *YouTubeData) downloadTrack(ctx context.Context, info cache.TrackInfo, v
 		return "", errors.New("missing YouTube video ID")
 	}
 
-	// 1) Try worker API if configured
 	if base := strings.TrimRight(y.ApiUrl, "/"); base != "" {
 		if video {
 			watchURL := "https://www.youtube.com/watch?v=" + videoID
-			streamURL := base + "/stream?" + url.Values{"url": {watchURL}}.Encode()
-			target := filepath.Join(config.Conf.DownloadsDir, fmt.Sprintf("%s.mp4", videoID))
-			if path, err := DownloadFile(ctx, streamURL, target, false); err == nil {
-				return path, nil
-			} else {
-				log.Printf("stream failed, falling back to yt-dlp: %v", err)
+			apiURL := base + "/yt?" + url.Values{"url": {watchURL}}.Encode()
+
+			resp, err := sendRequest(ctx, http.MethodGet, apiURL, nil, nil)
+			if err == nil {
+				defer resp.Body.Close()
+				if resp.StatusCode == http.StatusOK {
+					var data struct {
+						Success     bool   `json:"success"`
+						DownloadURL string `json:"download_url"`
+						Credit      string `json:"credit"`
+					}
+					if json.NewDecoder(resp.Body).Decode(&data) == nil && data.Success && data.DownloadURL != "" {
+						ext := pickExtFromURL(data.DownloadURL, ".mp4")
+						target := filepath.Join(config.Conf.DownloadsDir, fmt.Sprintf("%s%s", videoID, ext))
+						if path, derr := DownloadFile(ctx, data.DownloadURL, target, false); derr == nil {
+							return path, nil
+						}
+					}
+				}
 			}
 		} else {
 			apiURL := base + "/yt?" + url.Values{
@@ -277,38 +276,30 @@ func (y *YouTubeData) downloadTrack(ctx context.Context, info cache.TrackInfo, v
 				"format": {"m4a"},
 			}.Encode()
 
-			if resp, err := sendRequest(ctx, http.MethodGet, apiURL, nil, nil); err == nil {
-				func() { _ = resp.Body.Close() }()
+			resp, err := sendRequest(ctx, http.MethodGet, apiURL, nil, nil)
+			if err == nil {
+				defer resp.Body.Close()
 				if resp.StatusCode == http.StatusOK {
 					var data struct {
 						Success     bool   `json:"success"`
 						DownloadURL string `json:"download_url"`
 						Credit      string `json:"credit"`
 					}
-					if err := json.NewDecoder(resp.Body).Decode(&data); err == nil && data.Success && data.DownloadURL != "" {
-						target := filepath.Join(config.Conf.DownloadsDir, fmt.Sprintf("%s.m4a", videoID))
+					if json.NewDecoder(resp.Body).Decode(&data) == nil && data.Success && data.DownloadURL != "" {
+						ext := pickExtFromURL(data.DownloadURL, ".m4a")
+						target := filepath.Join(config.Conf.DownloadsDir, fmt.Sprintf("%s%s", videoID, ext))
 						if path, derr := DownloadFile(ctx, data.DownloadURL, target, false); derr == nil {
 							return path, nil
-						} else {
-							log.Printf("download_url fetch failed, fallback to yt-dlp: %v", derr)
 						}
-					} else {
-						log.Printf("worker /yt invalid JSON or no URL, fallback to yt-dlp")
 					}
-				} else {
-					log.Printf("worker /yt status %s, fallback to yt-dlp", resp.Status)
 				}
-			} else {
-				log.Printf("worker /yt request failed, fallback to yt-dlp: %v", err)
 			}
 		}
 	}
 
-	// 2) Fallback: yt-dlp
 	return y.downloadWithYtDlp(ctx, videoID, video)
 }
 
-// getCookieFile for structure compatibility
 func (y *YouTubeData) getCookieFile() string {
 	cookiesPath := config.Conf.CookiesPath
 	if len(cookiesPath) == 0 {
@@ -320,4 +311,13 @@ func (y *YouTubeData) getCookieFile() string {
 		return cookiesPath[0]
 	}
 	return cookiesPath[n.Int64()]
+}
+
+func pickExtFromURL(u, fallback string) string {
+	if parsed, err := url.Parse(u); err == nil {
+		if ext := filepath.Ext(parsed.Path); ext != "" && len(ext) <= 6 {
+			return ext
+		}
+	}
+	return fallback
 }
