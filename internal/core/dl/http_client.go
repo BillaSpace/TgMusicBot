@@ -31,19 +31,22 @@ import (
 )
 
 const (
-	defaultRequestTimeout = 30 * time.Second
-	defaultConnectTimeout = 10 * time.Second
+	// Bump timeouts to tolerate slow header starts from worker/upstream.
+	defaultRequestTimeout = 90 * time.Second // was 30
+	defaultConnectTimeout = 15 * time.Second // was 10
 	maxRetries            = 2
 	initialBackoff        = 1 * time.Second
 )
 
 var client = &http.Client{
-	Timeout: defaultRequestTimeout,
+	Timeout: defaultRequestTimeout, // overall cap per request
 	Transport: &http.Transport{
 		TLSHandshakeTimeout:   defaultConnectTimeout,
-		ResponseHeaderTimeout: defaultRequestTimeout,
+		ResponseHeaderTimeout: 75 * time.Second, // was 30s
 		IdleConnTimeout:       90 * time.Second,
 		MaxIdleConns:          100,
+		// If HTTP/2 via Cloudflare is flaky, you can force HTTP/1.1 by uncommenting:
+		// TLSNextProto: map[string]func(string, *tls.Conn) http.RoundTripper{},
 	},
 }
 
@@ -105,6 +108,10 @@ func isTemporaryError(err error) bool {
 	if errors.As(err, &netErr) {
 		return netErr.Timeout() || netErr.Temporary()
 	}
+	// Treat explicit context timeouts as non-retryable (caller decides fallback).
+	if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
+		return false
+	}
 	return false
 }
 
@@ -160,7 +167,8 @@ func DownloadFile(ctx context.Context, urlStr, fileName string, overwrite bool) 
 		return "", errors.New("an empty URL was provided")
 	}
 
-	ctx, cancel := context.WithTimeout(ctx, downloadTimeout)
+	// Keep a generous overall timeout for large files.
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Minute)
 	defer cancel()
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, urlStr, nil)
@@ -168,7 +176,8 @@ func DownloadFile(ctx context.Context, urlStr, fileName string, overwrite bool) 
 		return "", fmt.Errorf("failed to create the request: %w", err)
 	}
 
-	resp, err := http.DefaultClient.Do(req)
+	// Use the tuned shared client (not http.DefaultClient).
+	resp, err := client.Do(req)
 	if err != nil {
 		return "", fmt.Errorf("the request failed: %w", err)
 	}
