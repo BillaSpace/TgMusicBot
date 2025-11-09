@@ -15,7 +15,6 @@ import (
 
 	"github.com/AshokShau/TgMusicBot/internal/vc/ntgcalls"
 	"github.com/AshokShau/TgMusicBot/internal/vc/ubot/types"
-
 	"github.com/Laky-64/gologging"
 	tg "github.com/amarnathcjd/gogram/telegram"
 )
@@ -207,11 +206,16 @@ func (ctx *Context) handleUpdates() {
 					} else if slices.Contains(ctx.mutedByAdmin, chatId) {
 						state, err := ctx.binding.GetState(chatId)
 						if err != nil {
-							panic(err)
+							gologging.ErrorF("[uBContext] Error getting state %v", err)
+							continue
+							//panic(err)
 						}
+
 						err = ctx.setCallStatus(participantsUpdate.Call, state)
 						if err != nil {
-							panic(err)
+							//panic(err)
+							gologging.ErrorF("[uBContext] Error setting call status %v", err)
+							continue
 						}
 						ctx.mutedByAdmin = stdRemove(ctx.mutedByAdmin, chatId)
 					}
@@ -251,25 +255,27 @@ func (ctx *Context) handleUpdates() {
 
 	ctx.binding.OnRequestBroadcastTimestamp(func(chatId int64) {
 		ctx.mapsMutex.Lock()
-		if ctx.inputGroupCalls[chatId] != nil {
-			ctx.mapsMutex.Unlock()
-			channels, err := ctx.App.PhoneGetGroupCallStreamChannels(ctx.inputGroupCalls[chatId])
+		inputGroupCall := ctx.inputGroupCalls[chatId]
+		ctx.mapsMutex.Unlock()
+
+		if inputGroupCall != nil {
+			channels, err := ctx.App.PhoneGetGroupCallStreamChannels(inputGroupCall)
 			if err == nil {
 				_ = ctx.binding.SendBroadcastTimestamp(chatId, channels.Channels[0].LastTimestampMs)
 			}
-		} else {
-			ctx.mapsMutex.Unlock()
 		}
 	})
 
 	ctx.binding.OnRequestBroadcastPart(func(chatId int64, segmentPartRequest ntgcalls.SegmentPartRequest) {
 		ctx.mapsMutex.Lock()
-		if ctx.inputGroupCalls[chatId] != nil {
-			ctx.mapsMutex.Unlock()
+		inputGroupCall := ctx.inputGroupCalls[chatId]
+		ctx.mapsMutex.Unlock()
+
+		if inputGroupCall != nil {
 			file, err := ctx.App.UploadGetFile(
 				&tg.UploadGetFileParams{
 					Location: &tg.InputGroupCallStream{
-						Call:         ctx.inputGroupCalls[chatId],
+						Call:         inputGroupCall,
 						TimeMs:       segmentPartRequest.Timestamp,
 						Scale:        0,
 						VideoChannel: segmentPartRequest.ChannelID,
@@ -302,15 +308,17 @@ func (ctx *Context) handleUpdates() {
 				segmentPartRequest.QualityUpdate,
 				data,
 			)
-		} else {
-			ctx.mapsMutex.Unlock()
 		}
 	})
 
 	ctx.binding.OnSignal(func(chatId int64, signal []byte) {
 		ctx.mapsMutex.Lock()
-		_, _ = ctx.App.PhoneSendSignalingData(ctx.inputCalls[chatId], signal)
+		inputCall := ctx.inputCalls[chatId]
 		ctx.mapsMutex.Unlock()
+
+		if inputCall != nil {
+			_, _ = ctx.App.PhoneSendSignalingData(inputCall, signal)
+		}
 	})
 
 	ctx.binding.OnConnectionChange(func(chatId int64, state ntgcalls.NetworkInfo) {
