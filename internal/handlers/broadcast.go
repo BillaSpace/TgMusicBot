@@ -84,6 +84,25 @@ func broadcastHandler(m *telegram.NewMessage) error {
 		}
 	}
 
+	// --- Deduplicate to prevent double sends ---
+	chatIDs = uniqueIDs(chatIDs)
+	userIDs = uniqueIDs(userIDs)
+
+	// If broadcasting to ALL, skip users that also exist in chats (chat wins)
+	if target == "all" {
+		chatSet := make(map[int64]struct{}, len(chatIDs))
+		for _, id := range chatIDs {
+			chatSet[id] = struct{}{}
+		}
+		filtered := make([]int64, 0, len(userIDs))
+		for _, id := range userIDs {
+			if _, clash := chatSet[id]; !clash {
+				filtered = append(filtered, id)
+			}
+		}
+		userIDs = filtered
+	}
+
 	total := len(chatIDs) + len(userIDs)
 	if total == 0 {
 		_, _ = m.Reply("ℹ️ Nothing to broadcast to (no users/chats found).", telegram.SendOptions{})
@@ -115,7 +134,7 @@ func broadcastHandler(m *telegram.NewMessage) error {
 	sent := 0
 
 	// modest concurrency to avoid floodwaits
-	sem := make(chan struct{}, 12)
+	sem := make(chan struct{}, 10)
 	var wg sync.WaitGroup
 
 	send := func(id int64, isChat bool) {
@@ -234,7 +253,7 @@ func getAllUsersSafe(ctx context.Context) ([]int64, error) {
 // extractNumericID returns a usable Telegram ID, handling multiple shapes:
 // 1) Numeric/string _id directly
 // 2) _id is non-numeric -> try fields: chat_id, user_id, id, tg_id, peer_id
-// 3) fallback to embedded "chat.id" / "user.id" if present
+// 3) fallback to embedded "chat.id" / "user.id" if present 
 func extractNumericID(doc bson.M) (int64, bool) {
 	if id, ok := toInt64(doc["_id"]); ok {
 		return id, true
@@ -272,4 +291,23 @@ func toInt64(v any) (int64, bool) {
 		}
 	}
 	return 0, false
+}
+
+func uniqueIDs(in []int64) []int64 {
+	if len(in) <= 1 {
+		return in
+	}
+	seen := make(map[int64]struct{}, len(in))
+	out := make([]int64, 0, len(in))
+	for _, id := range in {
+		if id == 0 {
+			continue
+		}
+		if _, ok := seen[id]; ok {
+			continue
+		}
+		seen[id] = struct{}{}
+		out = append(out, id)
+	}
+	return out
 }
