@@ -43,7 +43,7 @@ var youtubePatterns = map[string]*regexp.Regexp{
 func NewYouTubeData(query string) *YouTubeData {
 	return &YouTubeData{
 		Query:    clearQuery(query),
-		ApiUrl:   strings.TrimRight(config.Conf.ApiUrl, "/"),
+		ApiUrl:   strings.TrimRight(strings.TrimSpace(config.Conf.ApiUrl), "/"),
 		APIKey:   "",
 		Patterns: youtubePatterns,
 	}
@@ -246,7 +246,8 @@ func (y *YouTubeData) downloadTrack(ctx context.Context, info cache.TrackInfo, v
 		return "", errors.New("missing YouTube video ID")
 	}
 
-	if base := strings.TrimRight(y.ApiUrl, "/"); base != "" {
+	base := strings.TrimRight(strings.TrimSpace(y.ApiUrl), "/")
+	if base != "" {
 		if video {
 			watchURL := "https://www.youtube.com/watch?v=" + videoID
 			apiURL := base + "/yt?" + url.Values{"url": {watchURL}}.Encode()
