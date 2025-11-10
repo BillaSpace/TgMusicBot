@@ -1,24 +1,16 @@
-/*
- * TgMusicBot - Telegram Music Bot
- *  Copyright (c) 2025 Ashok Shau
- *
- *  Licensed under GNU GPL v3
- *  See https://github.com/AshokShau/TgMusicBot
- */
-
 package ubot
 
 import (
 	"fmt"
 	"time"
 
-	ntgcalls2 "github.com/AshokShau/TgMusicBot/internal/vc/ntgcalls"
+	"github.com/AshokShau/TgMusicBot/internal/vc/ntgcalls"
 	"github.com/AshokShau/TgMusicBot/internal/vc/ubot/types"
 
 	tg "github.com/amarnathcjd/gogram/telegram"
 )
 
-func (ctx *Context) connectCall(chatId int64, mediaDescription ntgcalls2.MediaDescription, jsonParams string) error {
+func (ctx *Context) connectCall(chatId int64, mediaDescription ntgcalls.MediaDescription, jsonParams string) error {
 	defer func() {
 		if ctx.waitConnect[chatId] != nil {
 			delete(ctx.waitConnect, chatId)
@@ -44,12 +36,12 @@ func (ctx *Context) connectCall(chatId int64, mediaDescription ntgcalls2.MediaDe
 			return err
 		}
 
-		err = ctx.binding.SetStreamSources(chatId, ntgcalls2.CaptureStream, mediaDescription)
+		err = ctx.binding.SetStreamSources(chatId, ntgcalls.CaptureStream, mediaDescription)
 		if err != nil {
 			return err
 		}
 
-		ctx.p2pConfigs[chatId].GAorB, err = ctx.binding.InitExchange(chatId, ntgcalls2.DhConfig{
+		ctx.p2pConfigs[chatId].GAorB, err = ctx.binding.InitExchange(chatId, ntgcalls.DhConfig{
 			G:      ctx.p2pConfigs[chatId].DhConfig.G,
 			P:      ctx.p2pConfigs[chatId].DhConfig.P,
 			Random: ctx.p2pConfigs[chatId].DhConfig.Random,
@@ -58,7 +50,7 @@ func (ctx *Context) connectCall(chatId int64, mediaDescription ntgcalls2.MediaDe
 			return err
 		}
 
-		protocolRaw := ntgcalls2.GetProtocol()
+		protocolRaw := ntgcalls.GetProtocol()
 		protocol := &tg.PhoneCallProtocol{
 			UdpP2P:          protocolRaw.UdpP2P,
 			UdpReflector:    protocolRaw.UdpReflector,
@@ -141,7 +133,7 @@ func (ctx *Context) connectCall(chatId int64, mediaDescription ntgcalls2.MediaDe
 			return err
 		}
 
-		err = ctx.binding.SetStreamSources(chatId, ntgcalls2.CaptureStream, mediaDescription)
+		err = ctx.binding.SetStreamSources(chatId, ntgcalls.CaptureStream, mediaDescription)
 		if err != nil {
 			_ = ctx.binding.Stop(chatId)
 			return err
@@ -193,7 +185,7 @@ func (ctx *Context) connectCall(chatId int64, mediaDescription ntgcalls2.MediaDe
 			return err
 		}
 
-		if connectionMode == ntgcalls2.StreamConnection && len(jsonParams) > 0 {
+		if connectionMode == ntgcalls.StreamConnection && len(jsonParams) > 0 {
 			ctx.pendingConnections[chatId] = &types.PendingConnection{
 				MediaDescription: mediaDescription,
 				Payload:          jsonParams,

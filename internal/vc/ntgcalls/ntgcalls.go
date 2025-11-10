@@ -1,11 +1,3 @@
-/*
- * TgMusicBot - Telegram Music Bot
- *  Copyright (c) 2025 Ashok Shau
- *
- *  Licensed under GNU GPL v3
- *  See https://github.com/AshokShau/TgMusicBot
- */
-
 package ntgcalls
 
 //#include "ntgcalls.h"
@@ -20,7 +12,6 @@ package ntgcalls
 //extern void handleRequestBroadcastPart(uintptr_t ptr, int64_t chatID, ntg_segment_part_request_struct segmentPartRequest, void*);
 //extern void handleLogs(ntg_log_message_struct logMessage);
 import "C"
-
 import (
 	"fmt"
 	"unsafe"
