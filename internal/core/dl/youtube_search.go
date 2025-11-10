@@ -30,6 +30,9 @@ func searchYouTube(query string) ([]cache.MusicTrack, error) {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 	req.Header.Set("User-Agent", "Mozilla/5.0 (X11; Linux x86_64)")
+	// Helps keep the markup predictable so regexes match reliably.
+	req.Header.Set("Accept-Language", "en-US,en;q=0.9")
+
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("request failed: %w", err)
@@ -45,14 +48,14 @@ func searchYouTube(query string) ([]cache.MusicTrack, error) {
 		return nil, fmt.Errorf("failed to read response body: %w", err)
 	}
 
-	re := regexp.MustCompile(`var ytInitialData = (.*?);\s*</script>`)
-	match := re.FindSubmatch(body)
-	if len(match) < 2 {
-		return nil, fmt.Errorf("ytInitialData not found")
+	// Robustly extract ytInitialData JSON (YouTube often inserts newlines).
+	jsonBlob, err := extractInitialData(body)
+	if err != nil {
+		return nil, err
 	}
 
 	var data map[string]interface{}
-	if err := json.Unmarshal(match[1], &data); err != nil {
+	if err := json.Unmarshal(jsonBlob, &data); err != nil {
 		return nil, err
 	}
 
@@ -69,6 +72,26 @@ func searchYouTube(query string) ([]cache.MusicTrack, error) {
 	return tracks, nil
 }
 
+// Try multiple regex patterns to find ytInitialData JSON.
+// The (?s) flag makes '.' match newlines so we don't choke on multi-line scripts.
+func extractInitialData(body []byte) ([]byte, error) {
+	patterns := []*regexp.Regexp{
+		// Classic form: var ytInitialData = { ... };
+		regexp.MustCompile(`(?s)var\s+ytInitialData\s*=\s*(\{.*?\});\s*</script>`),
+		// Inlined object form: "ytInitialData": { ... },
+		regexp.MustCompile(`(?s)"ytInitialData"\s*:\s*(\{.*?\})\s*,\s*"(?:ytcfg|responseContext)"`),
+		// Fallback: window["ytInitialData"] = { ... };
+		regexp.MustCompile(`(?s)window\[\s*["']ytInitialData["']\s*\]\s*=\s*(\{.*?\});\s*</script>`),
+	}
+
+	for _, re := range patterns {
+		if m := re.FindSubmatch(body); len(m) >= 2 && len(m[1]) > 0 {
+			return m[1], nil
+		}
+	}
+	return nil, fmt.Errorf("ytInitialData not found")
+}
+
 // Recursively find items
 func parseSearchResults(node interface{}, tracks *[]cache.MusicTrack) {
 	switch v := node.(type) {
@@ -77,12 +100,28 @@ func parseSearchResults(node interface{}, tracks *[]cache.MusicTrack) {
 			parseSearchResults(item, tracks)
 		}
 	case map[string]interface{}:
+		// Direct video result
 		if vid, ok := dig(v, "videoRenderer").(map[string]interface{}); ok {
 			id := safeString(vid["videoId"])
+			if id == "" {
+				return
+			}
 			title := safeString(dig(vid, "title", "runs", 0, "text"))
-			thumb := safeString(dig(vid, "thumbnail", "thumbnails", 0, "url"))
+
+			// pick the last (usually largest) thumbnail if available
+			thumb := safeString(dig(vid, "thumbnail", "thumbnails", -1))
+			if thumb == "" {
+				thumb = safeString(dig(vid, "thumbnail", "thumbnails", 0, "url"))
+			}
+			// If -1 returns the entire object, pull url safely
+			if !strings.HasPrefix(thumb, "http") {
+				thumb = safeString(dig(vid, "thumbnail", "thumbnails", 0, "url"))
+			}
+
 			durationText := safeString(dig(vid, "lengthText", "simpleText"))
+			// Some results (Shorts/Live) may not have lengthText
 			duration := parseDuration(durationText)
+
 			*tracks = append(*tracks, cache.MusicTrack{
 				URL:      "https://www.youtube.com/watch?v=" + id,
 				Name:     title,
@@ -91,10 +130,12 @@ func parseSearchResults(node interface{}, tracks *[]cache.MusicTrack) {
 				Duration: duration,
 				Platform: "youtube",
 			})
-		} else {
-			for _, child := range v {
-				parseSearchResults(child, tracks)
-			}
+			return
+		}
+
+		// Keep walking nested structures
+		for _, child := range v {
+			parseSearchResults(child, tracks)
 		}
 	}
 }
@@ -111,8 +152,17 @@ func dig(m interface{}, path ...interface{}) interface{} {
 				return nil
 			}
 		case int:
-			if arr, ok := curr.([]interface{}); ok && len(arr) > key {
-				curr = arr[key]
+			if arr, ok := curr.([]interface{}); ok {
+				idx := key
+				// support negative indices (e.g., -1 = last)
+				if idx < 0 {
+					idx = len(arr) + idx
+				}
+				if idx >= 0 && idx < len(arr) {
+					curr = arr[idx]
+				} else {
+					return nil
+				}
 			} else {
 				return nil
 			}
@@ -126,10 +176,16 @@ func safeString(v interface{}) string {
 	if s, ok := v.(string); ok {
 		return s
 	}
+	// If it's a map (thumbnail object), try url field
+	if m, ok := v.(map[string]interface{}); ok {
+		if u, ok := m["url"].(string); ok {
+			return u
+		}
+	}
 	return ""
 }
 
-// parse duration like "3:45" -> 225 seconds
+// parse duration like "3:45" -> 225 seconds (also handles "1:02:03")
 func parseDuration(s string) int {
 	if s == "" {
 		return 0
