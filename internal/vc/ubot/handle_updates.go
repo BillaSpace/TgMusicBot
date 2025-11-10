@@ -1,20 +1,12 @@
-/*
- * TgMusicBot - Telegram Music Bot
- *  Copyright (c) 2025 Ashok Shau
- *
- *  Licensed under GNU GPL v3
- *  See https://github.com/AshokShau/TgMusicBot
- */
-
 package ubot
 
 import (
 	"fmt"
+	"github.com/AshokShau/TgMusicBot/internal/vc/ntgcalls"
+	"github.com/AshokShau/TgMusicBot/internal/vc/ubot/types"
 	"slices"
 	"time"
 
-	"github.com/AshokShau/TgMusicBot/internal/vc/ntgcalls"
-	"github.com/AshokShau/TgMusicBot/internal/vc/ubot/types"
 	"github.com/Laky-64/gologging"
 	tg "github.com/amarnathcjd/gogram/telegram"
 )
@@ -57,31 +49,25 @@ func (ctx *Context) handleUpdates() {
 
 		switch phoneCall.(type) {
 		case *tg.PhoneCallAccepted, *tg.PhoneCallRequested, *tg.PhoneCallWaiting:
-			ctx.mapsMutex.Lock()
 			ctx.inputCalls[userId] = &tg.InputPhoneCall{
 				ID:         ID,
 				AccessHash: AccessHash,
 			}
-			ctx.mapsMutex.Unlock()
 		}
 
 		switch call := phoneCall.(type) {
 		case *tg.PhoneCallAccepted:
-			ctx.mapsMutex.Lock()
 			if ctx.p2pConfigs[userId] != nil {
 				ctx.p2pConfigs[userId].GAorB = call.GB
 				ctx.p2pConfigs[userId].WaitData <- nil
 			}
-			ctx.mapsMutex.Unlock()
 		case *tg.PhoneCallObj:
-			ctx.mapsMutex.Lock()
 			if ctx.p2pConfigs[userId] != nil {
 				ctx.p2pConfigs[userId].GAorB = call.GAOrB
 				ctx.p2pConfigs[userId].KeyFingerprint = call.KeyFingerprint
 				ctx.p2pConfigs[userId].PhoneCall = call
 				ctx.p2pConfigs[userId].WaitData <- nil
 			}
-			ctx.mapsMutex.Unlock()
 		case *tg.PhoneCallDiscarded:
 			var reasonMessage string
 			switch call.Reason.(type) {
@@ -90,29 +76,21 @@ func (ctx *Context) handleUpdates() {
 			case *tg.PhoneCallDiscardReasonHangup:
 				reasonMessage = fmt.Sprintf("call declined by %d", userId)
 			}
-			ctx.mapsMutex.Lock()
 			if ctx.p2pConfigs[userId] != nil {
-				ctx.p2pConfigs[userId].WaitData <- fmt.Errorf("%s", reasonMessage)
+				ctx.p2pConfigs[userId].WaitData <- fmt.Errorf(reasonMessage)
 			}
 			delete(ctx.inputCalls, userId)
-			ctx.mapsMutex.Unlock()
 			_ = ctx.binding.Stop(userId)
 		case *tg.PhoneCallRequested:
-			ctx.mapsMutex.Lock()
 			if ctx.p2pConfigs[userId] == nil {
-				ctx.mapsMutex.Unlock()
 				p2pConfigs, err := ctx.getP2PConfigs(call.GAHash)
 				if err != nil {
 					return err
 				}
-				ctx.mapsMutex.Lock()
 				ctx.p2pConfigs[userId] = p2pConfigs
-				ctx.mapsMutex.Unlock()
 				for _, callback := range ctx.incomingCallCallbacks {
 					go callback(ctx, userId)
 				}
-			} else {
-				ctx.mapsMutex.Unlock()
 			}
 		}
 		return nil
@@ -206,16 +184,11 @@ func (ctx *Context) handleUpdates() {
 					} else if slices.Contains(ctx.mutedByAdmin, chatId) {
 						state, err := ctx.binding.GetState(chatId)
 						if err != nil {
-							gologging.ErrorF("[uBContext] Error getting state %v", err)
-							continue
-							//panic(err)
+							panic(err)
 						}
-
 						err = ctx.setCallStatus(participantsUpdate.Call, state)
 						if err != nil {
-							//panic(err)
-							gologging.ErrorF("[uBContext] Error setting call status %v", err)
-							continue
+							panic(err)
 						}
 						ctx.mutedByAdmin = stdRemove(ctx.mutedByAdmin, chatId)
 					}
@@ -235,17 +208,13 @@ func (ctx *Context) handleUpdates() {
 			switch groupCallRaw.(type) {
 			case *tg.GroupCallObj:
 				groupCall := groupCallRaw.(*tg.GroupCallObj)
-				ctx.mapsMutex.Lock()
 				ctx.inputGroupCalls[chatID] = &tg.InputGroupCallObj{
 					ID:         groupCall.ID,
 					AccessHash: groupCall.AccessHash,
 				}
-				ctx.mapsMutex.Unlock()
 				return nil
 			case *tg.GroupCallDiscarded:
-				ctx.mapsMutex.Lock()
 				delete(ctx.inputGroupCalls, chatID)
-				ctx.mapsMutex.Unlock()
 				_ = ctx.binding.Stop(chatID)
 				return nil
 			}
@@ -254,12 +223,8 @@ func (ctx *Context) handleUpdates() {
 	})
 
 	ctx.binding.OnRequestBroadcastTimestamp(func(chatId int64) {
-		ctx.mapsMutex.Lock()
-		inputGroupCall := ctx.inputGroupCalls[chatId]
-		ctx.mapsMutex.Unlock()
-
-		if inputGroupCall != nil {
-			channels, err := ctx.App.PhoneGetGroupCallStreamChannels(inputGroupCall)
+		if ctx.inputGroupCalls[chatId] != nil {
+			channels, err := ctx.App.PhoneGetGroupCallStreamChannels(ctx.inputGroupCalls[chatId])
 			if err == nil {
 				_ = ctx.binding.SendBroadcastTimestamp(chatId, channels.Channels[0].LastTimestampMs)
 			}
@@ -267,15 +232,11 @@ func (ctx *Context) handleUpdates() {
 	})
 
 	ctx.binding.OnRequestBroadcastPart(func(chatId int64, segmentPartRequest ntgcalls.SegmentPartRequest) {
-		ctx.mapsMutex.Lock()
-		inputGroupCall := ctx.inputGroupCalls[chatId]
-		ctx.mapsMutex.Unlock()
-
-		if inputGroupCall != nil {
+		if ctx.inputGroupCalls[chatId] != nil {
 			file, err := ctx.App.UploadGetFile(
 				&tg.UploadGetFileParams{
 					Location: &tg.InputGroupCallStream{
-						Call:         inputGroupCall,
+						Call:         ctx.inputGroupCalls[chatId],
 						TimeMs:       segmentPartRequest.Timestamp,
 						Scale:        0,
 						VideoChannel: segmentPartRequest.ChannelID,
@@ -312,13 +273,7 @@ func (ctx *Context) handleUpdates() {
 	})
 
 	ctx.binding.OnSignal(func(chatId int64, signal []byte) {
-		ctx.mapsMutex.Lock()
-		inputCall := ctx.inputCalls[chatId]
-		ctx.mapsMutex.Unlock()
-
-		if inputCall != nil {
-			_, _ = ctx.App.PhoneSendSignalingData(inputCall, signal)
-		}
+		_, _ = ctx.App.PhoneSendSignalingData(ctx.inputCalls[chatId], signal)
 	})
 
 	ctx.binding.OnConnectionChange(func(chatId int64, state ntgcalls.NetworkInfo) {

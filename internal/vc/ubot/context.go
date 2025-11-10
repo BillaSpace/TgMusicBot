@@ -1,18 +1,9 @@
-/*
- * TgMusicBot - Telegram Music Bot
- *  Copyright (c) 2025 Ashok Shau
- *
- *  Licensed under GNU GPL v3
- *  See https://github.com/AshokShau/TgMusicBot
- */
-
 package ubot
 
 import (
-	"sync"
-
 	"github.com/AshokShau/TgMusicBot/internal/vc/ntgcalls"
 	"github.com/AshokShau/TgMusicBot/internal/vc/ubot/types"
+	"sync"
 
 	tg "github.com/amarnathcjd/gogram/telegram"
 )
@@ -27,7 +18,6 @@ type Context struct {
 	inputCalls            map[int64]*tg.InputPhoneCall
 	inputGroupCalls       map[int64]tg.InputGroupCall
 	participantsMutex     sync.Mutex
-	mapsMutex             sync.Mutex
 	callParticipants      map[int64]*types.CallParticipantsCache
 	pendingConnections    map[int64]*types.PendingConnection
 	callSources           map[int64]*types.CallSources
@@ -58,7 +48,6 @@ func NewInstance(app *tg.Client) (*Context, error) {
 		}
 		client.self = self
 	}
-
 	client.handleUpdates()
 	return client, nil
 }
