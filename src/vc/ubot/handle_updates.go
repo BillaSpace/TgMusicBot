@@ -233,13 +233,17 @@ func (ctx *Context) handleUpdates() {
 			switch groupCallRaw.(type) {
 			case *tg.GroupCallObj:
 				groupCall := groupCallRaw.(*tg.GroupCallObj)
+				ctx.groupCallsMutex.Lock()
 				ctx.inputGroupCalls[chatID] = &tg.InputGroupCallObj{
 					ID:         groupCall.ID,
 					AccessHash: groupCall.AccessHash,
 				}
+				ctx.groupCallsMutex.Unlock()
 				return nil
 			case *tg.GroupCallDiscarded:
+				ctx.groupCallsMutex.Lock()
 				delete(ctx.inputGroupCalls, chatID)
+				ctx.groupCallsMutex.Unlock()
 				_ = ctx.binding.Stop(chatID)
 				return nil
 			}
@@ -248,8 +252,11 @@ func (ctx *Context) handleUpdates() {
 	})
 
 	ctx.binding.OnRequestBroadcastTimestamp(func(chatId int64) {
-		if ctx.inputGroupCalls[chatId] != nil {
-			channels, err := ctx.App.PhoneGetGroupCallStreamChannels(ctx.inputGroupCalls[chatId])
+		ctx.groupCallsMutex.RLock()
+		call := ctx.inputGroupCalls[chatId]
+		ctx.groupCallsMutex.RUnlock()
+		if call != nil {
+			channels, err := ctx.App.PhoneGetGroupCallStreamChannels(call)
 			if err == nil {
 				_ = ctx.binding.SendBroadcastTimestamp(chatId, channels.Channels[0].LastTimestampMs)
 			}
@@ -257,11 +264,14 @@ func (ctx *Context) handleUpdates() {
 	})
 
 	ctx.binding.OnRequestBroadcastPart(func(chatId int64, segmentPartRequest ntgcalls.SegmentPartRequest) {
-		if ctx.inputGroupCalls[chatId] != nil {
+		ctx.groupCallsMutex.RLock()
+		call := ctx.inputGroupCalls[chatId]
+		ctx.groupCallsMutex.RUnlock()
+		if call != nil {
 			file, err := ctx.App.UploadGetFile(
 				&tg.UploadGetFileParams{
 					Location: &tg.InputGroupCallStream{
-						Call:         ctx.inputGroupCalls[chatId],
+						Call:         call,
 						TimeMs:       segmentPartRequest.Timestamp,
 						Scale:        0,
 						VideoChannel: segmentPartRequest.ChannelID,
@@ -325,9 +335,11 @@ func (ctx *Context) handleUpdates() {
 		ctx.groupCallsMutex.RLock()
 		call := ctx.inputGroupCalls[chatId]
 		ctx.groupCallsMutex.RUnlock()
-		err := ctx.setCallStatus(call, state)
-		if err != nil {
-			fmt.Println(err)
+		if call != nil {
+			err := ctx.setCallStatus(call, state)
+			if err != nil {
+				fmt.Println(err)
+			}
 		}
 	})
 
