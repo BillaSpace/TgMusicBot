@@ -56,7 +56,9 @@ func main() {
 
 	destHeader := "src/vc/ntgcalls"
 	destLib := "src/vc"
-	
+	os.MkdirAll(destHeader, 0755)
+	os.MkdirAll(destLib, 0755)
+
 	filepath.Walk("ntgcalls_tmp", func(path string, info os.FileInfo, err error) error {
 		if err != nil || info.IsDir() {
 			return nil

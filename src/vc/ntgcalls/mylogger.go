@@ -21,6 +21,7 @@ const (
 	LevelInfo
 	LevelWarn
 	LevelError
+	LevelFatal
 )
 
 type Logger struct {
@@ -47,3 +48,4 @@ func (lg *Logger) Debug(msg string) { lg.log(LevelDebug, "DEBUG", msg) }
 func (lg *Logger) Info(msg string)  { lg.log(LevelInfo, "INFO", msg) }
 func (lg *Logger) Warn(msg string)  { lg.log(LevelWarn, "WARN", msg) }
 func (lg *Logger) Error(msg string) { lg.log(LevelError, "ERROR", msg) }
+func (lg *Logger) Fatal(msg string) { lg.log(LevelFatal, "FATAL", msg) }

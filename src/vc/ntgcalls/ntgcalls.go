@@ -39,7 +39,7 @@ func NTgCalls() *Client {
 
 var (
 	loggerNTGCalls = NewLogger("ntgcalls", LevelInfo)
-	loggerWebRTC   = NewLogger("webrtc", LevelError)
+	loggerWebRTC   = NewLogger("webrtc", LevelFatal)
 )
 
 //export handleLogs
