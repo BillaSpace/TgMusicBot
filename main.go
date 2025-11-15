@@ -11,22 +11,17 @@ package main
 import (
 	"context"
 	"log"
-	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
 
-	_ "net/http"
-	_ "net/http/pprof"
+	"ashokshau/tgmusic/src"
+	"ashokshau/tgmusic/src/config"
+	"ashokshau/tgmusic/src/core/db"
+	"ashokshau/tgmusic/src/lang"
+	"ashokshau/tgmusic/src/vc"
 
-	"github.com/AshokShau/TgMusicBot/internal"
-	"github.com/AshokShau/TgMusicBot/internal/config"
-	"github.com/AshokShau/TgMusicBot/internal/core/db"
-	"github.com/AshokShau/TgMusicBot/internal/lang"
-	"github.com/AshokShau/TgMusicBot/internal/vc"
-
-	"github.com/Laky-64/gologging"
 	tg "github.com/amarnathcjd/gogram/telegram"
 )
 
@@ -34,7 +29,7 @@ import (
 // It returns true if a flood wait error is handled, and false otherwise.
 func handleFlood(err error) bool {
 	if wait := tg.GetFloodWait(err); wait > 0 {
-		gologging.InfoF("A flood wait has been detected. Sleeping for %ds.", wait)
+		log.Printf("A flood wait has been detected. Sleeping for %ds.", wait)
 		time.Sleep(time.Duration(wait) * time.Second)
 		return true
 	}
@@ -46,18 +41,9 @@ func handleFlood(err error) bool {
 // main serves as the entry point for the application.
 // It initializes the configuration, database, and Telegram client, then starts the bot and waits for a shutdown signal.
 func main() {
-	gologging.SetLevel(gologging.InfoLevel)
-	gologging.GetLogger("ntgcalls").SetLevel(gologging.InfoLevel)
-	gologging.GetLogger("webrtc").SetLevel(gologging.FatalLevel)
-
 	if err := config.LoadConfig(); err != nil {
-		gologging.Fatal(err.Error())
+		panic(err)
 	}
-
-	go func() {
-		gologging.InfoF("[pprof] running on :%s", config.Conf.Port)
-		log.Println(http.ListenAndServe("0.0.0.0:"+config.Conf.Port, nil))
-	}()
 
 	err := lang.LoadTranslations()
 	if err != nil {
@@ -65,28 +51,30 @@ func main() {
 	}
 
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	// ctx, cancel := db.Ctx()
 	defer cancel()
 
-	cfg := tg.NewClientConfigBuilder(config.Conf.ApiId, config.Conf.ApiHash).
-		WithSession("bot.dat").
-		WithFloodHandler(handleFlood).
-		WithLogLevel(1).
-		Build()
-
-	client, err := tg.NewClient(cfg)
-	if err != nil {
-		gologging.FatalF("Failed to create the client: %v", err)
+	clientConfig := tg.ClientConfig{
+		AppID:         config.Conf.ApiId,
+		AppHash:       config.Conf.ApiHash,
+		MemorySession: true,
+		FloodHandler:  handleFlood,
+		SessionName:   "bot",
 	}
 
+	client, err := tg.NewClient(clientConfig)
+	if err != nil {
+		panic(err)
+	}
+
+	client.Log.SetColor(true)
 	_, err = client.Conn()
 	if err != nil {
-		gologging.FatalF("Failed to connect to Telegram: %v", err)
+		panic(err)
 	}
 
 	err = client.LoginBot(config.Conf.Token)
 	if err != nil {
-		gologging.FatalF("Failed to log in as the bot: %v", err)
+		panic(err)
 	}
 
 	if err := db.InitDatabase(ctx); err != nil {
@@ -95,15 +83,16 @@ func main() {
 
 	err = pkg.Init(client)
 	if err != nil {
-		gologging.FatalF("Failed to initialize the package: %v", err)
+		panic(err)
 		return
 	}
-	gologging.InfoF("The bot is running as @%s.", client.Me().Username)
+
+	client.Log.Info("The bot is running as @%s.", client.Me().Username)
 	_, _ = client.SendMessage(config.Conf.LoggerId, "The bot has started!")
 
 	<-ctx.Done()
 	// client.Idle()
-	gologging.InfoF("The bot is shutting down...")
+	client.Log.Info("The bot is shutting down...")
 	vc.Calls.StopAllClients()
 	_ = client.Stop()
 }
