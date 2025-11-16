@@ -94,7 +94,7 @@ func (ctx *Context) handleUpdates() {
 			cfg := ctx.p2pConfigs[userId]
 			ctx.p2pMutex.RUnlock()
 			if cfg != nil {
-				cfg.WaitData <- fmt.Errorf(reasonMessage)
+				cfg.WaitData <- fmt.Errorf("%s", reasonMessage)
 			}
 			ctx.inputCallsMutex.Lock()
 			delete(ctx.inputCalls, userId)
@@ -126,6 +126,8 @@ func (ctx *Context) handleUpdates() {
 		participantsUpdate := m.(*tg.UpdateGroupCallParticipants)
 		chatId, err := ctx.convertGroupCallId(participantsUpdate.Call.(*tg.InputGroupCallObj).ID)
 		if err == nil {
+			var addVideo = make(map[string][]ntgcalls.SsrcGroup)
+			var removeVideo = make(map[string]bool)
 			ctx.participantsMutex.Lock()
 			if ctx.callParticipants[chatId] == nil {
 				ctx.callParticipants[chatId] = &types.CallParticipantsCache{
@@ -151,16 +153,9 @@ func (ctx *Context) handleUpdates() {
 					if wasCamera != (participant.Video != nil) {
 						if participant.Video != nil {
 							ctx.callSources[chatId].CameraSources[participantId] = participant.Video.Endpoint
-							_, _ = ctx.binding.AddIncomingVideo(
-								chatId,
-								participant.Video.Endpoint,
-								parseVideoSources(participant.Video.SourceGroups),
-							)
+							addVideo[participant.Video.Endpoint] = parseVideoSources(participant.Video.SourceGroups)
 						} else {
-							_ = ctx.binding.RemoveIncomingVideo(
-								chatId,
-								ctx.callSources[chatId].CameraSources[participantId],
-							)
+							removeVideo[ctx.callSources[chatId].CameraSources[participantId]] = true
 							delete(ctx.callSources[chatId].CameraSources, participantId)
 						}
 					}
@@ -168,16 +163,9 @@ func (ctx *Context) handleUpdates() {
 					if wasScreen != (participant.Presentation != nil) {
 						if participant.Presentation != nil {
 							ctx.callSources[chatId].ScreenSources[participantId] = participant.Presentation.Endpoint
-							_, _ = ctx.binding.AddIncomingVideo(
-								chatId,
-								participant.Presentation.Endpoint,
-								parseVideoSources(participant.Presentation.SourceGroups),
-							)
+							addVideo[participant.Presentation.Endpoint] = parseVideoSources(participant.Presentation.SourceGroups)
 						} else {
-							_ = ctx.binding.RemoveIncomingVideo(
-								chatId,
-								ctx.callSources[chatId].ScreenSources[participantId],
-							)
+							removeVideo[ctx.callSources[chatId].ScreenSources[participantId]] = true
 							delete(ctx.callSources[chatId].ScreenSources, participantId)
 						}
 					}
@@ -185,6 +173,12 @@ func (ctx *Context) handleUpdates() {
 			}
 			ctx.callParticipants[chatId].LastMtprotoUpdate = time.Now()
 			ctx.participantsMutex.Unlock()
+			for endpoint, sources := range addVideo {
+				_, _ = ctx.binding.AddIncomingVideo(chatId, endpoint, sources)
+			}
+			for endpoint := range removeVideo {
+				_ = ctx.binding.RemoveIncomingVideo(chatId, endpoint)
+			}
 
 			for _, participant := range participantsUpdate.Participants {
 				userPeer, ok := participant.Peer.(*tg.PeerUser)
@@ -230,6 +224,7 @@ func (ctx *Context) handleUpdates() {
 			if err != nil {
 				return err
 			}
+
 			switch groupCallRaw.(type) {
 			case *tg.GroupCallObj:
 				groupCall := groupCallRaw.(*tg.GroupCallObj)
