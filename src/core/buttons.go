@@ -45,7 +45,7 @@ var PlaylistBtn = telegram.Button.Data("Pʟᴀʏʟɪsᴛ Cᴏᴍᴍᴀɴᴅꜱ",
 var ChannelBtn = telegram.Button.URL("ᴜᴘᴅᴀᴛᴇꜱ", "https://t.me/Meta_server")
 
 // GroupBtn is a button that links to the support group.
-var GroupBtn = telegram.Button.URL("ꜱᴜᴘᴘᴏʀᴛ", "https://t.me/GuardxSupport")
+var GroupBtn = telegram.Button.URL("ꜱᴜᴘᴘᴏʀᴛ", "https://t.me/billacore")
 
 // SourceCodeBtn is a button that links to the source code.
 var SourceCodeBtn = telegram.Button.URL("Sᴏᴜʀᴄᴇ Cᴏᴅᴇ", "https://github.com/AshokShau/TgMusicBot")
