@@ -13,13 +13,13 @@ import (
 	"crypto/rand"
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"math/big"
-	"os"
-	"io"
 	"mime"
-	"net/url"
 	"net/http"
+	"net/url"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
@@ -61,26 +61,26 @@ func clearQuery(query string) string {
 }
 
 // normalizeYouTubeURL converts various YouTube URL formats (e.g., youtu.be, shorts) into a standard watch URL.
-func (y *YouTubeData) normalizeYouTubeURL(url string) string {
+func (y *YouTubeData) normalizeYouTubeURL(urlStr string) string {
 	var videoID string
 	switch {
-	case strings.Contains(url, "youtu.be/"):
-		parts := strings.SplitN(strings.SplitN(url, "youtu.be/", 2)[1], "?", 2)
+	case strings.Contains(urlStr, "youtu.be/"):
+		parts := strings.SplitN(strings.SplitN(urlStr, "youtu.be/", 2)[1], "?", 2)
 		videoID = strings.SplitN(parts[0], "#", 2)[0]
-	case strings.Contains(url, "youtube.com/shorts/"):
-		parts := strings.SplitN(strings.SplitN(url, "youtube.com/shorts/", 2)[1], "?", 2)
+	case strings.Contains(urlStr, "youtube.com/shorts/"):
+		parts := strings.SplitN(strings.SplitN(urlStr, "youtube.com/shorts/", 2)[1], "?", 2)
 		videoID = strings.SplitN(parts[0], "#", 2)[0]
 	default:
-		return url
+		return urlStr
 	}
 	return "https://www.youtube.com/watch?v=" + videoID
 }
 
 // extractVideoID parses a YouTube URL and extracts the video ID.
-func (y *YouTubeData) extractVideoID(url string) string {
-	url = y.normalizeYouTubeURL(url)
+func (y *YouTubeData) extractVideoID(urlStr string) string {
+	urlStr = y.normalizeYouTubeURL(urlStr)
 	for _, pattern := range y.Patterns {
-		if match := pattern.FindStringSubmatch(url); len(match) > 1 {
+		if match := pattern.FindStringSubmatch(urlStr); len(match) > 1 {
 			return match[1]
 		}
 	}
@@ -151,6 +151,8 @@ func (y *YouTubeData) GetTrack(ctx context.Context) (cache.TrackInfo, error) {
 		return cache.TrackInfo{}, errors.New("the provided URL is invalid or the platform is not supported")
 	}
 
+	// keep previous behavior: attempt Api GetTrack only if both ApiUrl and APIKey are present,
+	// otherwise fallback to local GetInfo
 	if y.ApiUrl != "" && y.APIKey != "" {
 		if trackInfo, err := NewApiData(y.Query).GetTrack(ctx); err == nil {
 			return trackInfo, nil
@@ -183,12 +185,18 @@ func (y *YouTubeData) GetTrack(ctx context.Context) (cache.TrackInfo, error) {
 // downloadTrack handles the download of a track from YouTube.
 // It returns the file path of the downloaded track or an error if the download fails.
 func (y *YouTubeData) downloadTrack(ctx context.Context, info cache.TrackInfo, video bool) (string, error) {
-	if !video && y.ApiUrl != "" && y.APIKey != "" {
+	// New behavior: if API base is configured, always try API first (API key optional),
+	// then fall back to yt-dlp if API call fails for any reason.
+	if y.ApiUrl != "" {
 		if filePath, err := y.downloadWithApi(ctx, info.TC, video); err == nil {
 			return filePath, nil
+		} else {
+			// log error and fall back to yt-dlp
+			log.Printf("downloadWithApi failed for %s: %v — falling back to yt-dlp", info.TC, err)
 		}
 	}
 
+	// Fallback to yt-dlp
 	filePath, err := y.downloadWithYtDlp(ctx, info.TC, video)
 	return filePath, err
 }
@@ -344,7 +352,7 @@ func (y *YouTubeData) downloadWithApi(ctx context.Context, videoID string, _ boo
 	}
 
 	targetPath := filepath.Join(config.Conf.DownloadsDir, videoID+ext)
-	if err := os.MkdirAll(filepath.Dir(targetPath), defaultDownloadDirPerm); err != nil {
+	if err := os.MkdirAll(filepath.Dir(targetPath), 0o755); err != nil {
 		return "", fmt.Errorf("failed to create downloads dir: %w", err)
 	}
 
