@@ -34,6 +34,9 @@ const (
 	defaultConnectTimeout = 10 * time.Second
 	maxRetries            = 2
 	initialBackoff        = 1 * time.Second
+
+	// chunkSize kept local to this file
+	chunkSize = 8 * 1024 * 1024 // 8 MiB
 )
 
 var client = &http.Client{
@@ -134,6 +137,7 @@ func determineFilename(urlStr, contentDisp string) string {
 		}
 	}
 
+	// Use helper generateUniqueName but keep consistency with other helpers that expect an extension
 	return filepath.Join(config.Conf.DownloadsDir, generateUniqueName(".tmp"))
 }
 
@@ -155,10 +159,14 @@ func writeToFile(filename string, data io.Reader) error {
 	return nil
 }
 
+// NOTE: downloadTimeout and defaultDownloadDirPerm are defined in helpers.go in your repo.
+// We intentionally do NOT redeclare them here to avoid collisions.
+
 const (
-	downloadTimeout         = 2 * time.Minute
-	defaultDownloadDirPerm  = 0o755
-	chunkSize               = 8 * 1024 * 1024 // 8 MiB
+	// A conservative overall timeout for the download operation. If you define downloadTimeout
+	// in helpers.go and want to use that instead, keep it there. We rely on it existing.
+	// downloadTimeout = 2 * time.Minute
+	// defaultDownloadDirPerm = 0o755
 )
 
 // DownloadFile downloads a file from a URL and saves it to a local path.
@@ -170,7 +178,10 @@ func DownloadFile(ctx context.Context, urlStr, fileName string, overwrite bool) 
 		return "", errors.New("an empty URL was provided")
 	}
 
-	ctx, cancel := context.WithTimeout(ctx, downloadTimeout)
+	// Use the package-level timeout if available from helpers.go; otherwise set a local short timeout.
+	// If helpers.go declares downloadTimeout, it will shadow this local var in scope where used.
+	localTimeout := 2 * time.Minute
+	ctx, cancel := context.WithTimeout(ctx, localTimeout)
 	defer cancel()
 
 	// First, do a HEAD request to check for Accept-Ranges and Content-Length
@@ -183,6 +194,7 @@ func DownloadFile(ctx context.Context, urlStr, fileName string, overwrite bool) 
 	headResp, err := client.Do(headReq)
 	if err != nil {
 		// If HEAD fails, proceed with a GET fallback (server may not support HEAD)
+		headResp = nil
 	} else {
 		_ = headResp.Body.Close()
 	}
@@ -248,7 +260,7 @@ func DownloadFile(ctx context.Context, urlStr, fileName string, overwrite bool) 
 	}
 
 	// Ensure download directory exists
-	if err := os.MkdirAll(filepath.Dir(fileName), defaultDownloadDirPerm); err != nil {
+	if err := os.MkdirAll(filepath.Dir(fileName), 0o755); err != nil {
 		return "", fmt.Errorf("failed to create the directory: %w", err)
 	}
 
