@@ -42,7 +42,7 @@ var DevsBtn = telegram.Button.Data("Dᴇᴠꜱ Cᴏᴍᴍᴀɴᴅꜱ", "help_dev
 var PlaylistBtn = telegram.Button.Data("Pʟᴀʏʟɪsᴛ Cᴏᴍᴍᴀɴᴅꜱ", "help_playlist")
 
 // ChannelBtn is a button that links to the updates channel.
-var ChannelBtn = telegram.Button.URL("ᴜᴘᴅᴀᴛᴇꜱ", "https://t.me/FallenProjects")
+var ChannelBtn = telegram.Button.URL("ᴜᴘᴅᴀᴛᴇꜱ", "https://t.me/Meta_server")
 
 // GroupBtn is a button that links to the support group.
 var GroupBtn = telegram.Button.URL("ꜱᴜᴘᴘᴏʀᴛ", "https://t.me/GuardxSupport")
