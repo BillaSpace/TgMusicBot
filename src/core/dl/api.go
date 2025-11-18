@@ -15,8 +15,10 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"mime"
 	"net/http"
 	"net/url"
+	"path/filepath"
 	"regexp"
 	"strings"
 
@@ -54,8 +56,8 @@ func NewApiData(query string) *ApiData {
 // IsValid checks if the query is a valid URL for any of the supported platforms.
 // It returns true if the URL matches a known pattern, and false otherwise.
 func (a *ApiData) IsValid() bool {
-	if a.Query == "" || a.ApiUrl == "" || a.APIKey == "" {
-		log.Printf("The query, API URL, or API key is missing.")
+	if a.Query == "" {
+		log.Printf("The query is empty.")
 		return false
 	}
 
@@ -74,8 +76,18 @@ func (a *ApiData) GetInfo(ctx context.Context) (cache.PlatformTracks, error) {
 		return cache.PlatformTracks{}, errors.New("the provided URL is invalid or the platform is not supported")
 	}
 
+	if a.ApiUrl == "" {
+		return cache.PlatformTracks{}, errors.New("api url is not configured")
+	}
+
 	fullURL := fmt.Sprintf("%s/get_url?%s", a.ApiUrl, url.Values{"url": {a.Query}}.Encode())
-	resp, err := sendRequest(ctx, http.MethodGet, fullURL, nil, map[string]string{"X-API-Key": a.APIKey})
+
+	headers := map[string]string{}
+	if a.APIKey != "" {
+		headers["X-API-Key"] = a.APIKey
+	}
+
+	resp, err := sendRequest(ctx, http.MethodGet, fullURL, nil, headers)
 	if err != nil {
 		return cache.PlatformTracks{}, fmt.Errorf("the GetInfo request failed: %w", err)
 	}
@@ -102,16 +114,27 @@ func (a *ApiData) Search(ctx context.Context) (cache.PlatformTracks, error) {
 		return a.GetInfo(ctx)
 	}
 
+	if a.ApiUrl == "" {
+		return cache.PlatformTracks{}, errors.New("api url is not configured")
+	}
+
 	fullURL := fmt.Sprintf("%s/search?%s", a.ApiUrl, url.Values{
 		"query": {a.Query},
 		"limit": {"5"},
 	}.Encode())
 
+	headers := map[string]string{}
+	if a.APIKey != "" {
+		headers["X-API-Key"] = a.APIKey
+	}
+
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, fullURL, nil)
 	if err != nil {
 		return cache.PlatformTracks{}, fmt.Errorf("failed to create the search request: %w", err)
 	}
-	req.Header.Set("X-API-Key", a.APIKey)
+	for k, v := range headers {
+		req.Header.Set(k, v)
+	}
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -135,8 +158,18 @@ func (a *ApiData) Search(ctx context.Context) (cache.PlatformTracks, error) {
 // GetTrack retrieves detailed information for a single track from the API.
 // It returns a TrackInfo object or an error if the request fails.
 func (a *ApiData) GetTrack(ctx context.Context) (cache.TrackInfo, error) {
+	if a.ApiUrl == "" {
+		return cache.TrackInfo{}, errors.New("api url is not configured")
+	}
+
 	fullURL := fmt.Sprintf("%s/track?%s", a.ApiUrl, url.Values{"url": {a.Query}}.Encode())
-	resp, err := sendRequest(ctx, http.MethodGet, fullURL, nil, map[string]string{"X-API-Key": a.APIKey})
+
+	headers := map[string]string{}
+	if a.APIKey != "" {
+		headers["X-API-Key"] = a.APIKey
+	}
+
+	resp, err := sendRequest(ctx, http.MethodGet, fullURL, nil, headers)
 	if err != nil {
 		return cache.TrackInfo{}, fmt.Errorf("the GetTrack request failed: %w", err)
 	}
@@ -159,9 +192,92 @@ func (a *ApiData) GetTrack(ctx context.Context) (cache.TrackInfo, error) {
 // it delegates the download to the YouTube downloader.
 // It returns the file path of the downloaded track or an error if the download fails.
 func (a *ApiData) downloadTrack(ctx context.Context, info cache.TrackInfo, video bool) (string, error) {
+	// If youtube video + video requested -> fallback to youtube downloader
 	if info.Platform == "youtube" && video {
 		yt := NewYouTubeData(a.Query)
 		return yt.downloadTrack(ctx, info, video)
+	}
+
+	// If API provides a /stream endpoint that returns direct media, try it first.
+	if a.ApiUrl != "" {
+		// Build stream URL: {apiUrl}/stream?url={original_query}[&type=audio&format=opus ...]
+		streamBase := strings.TrimRight(a.ApiUrl, "/") + "/stream"
+		values := url.Values{}
+		values.Set("url", a.Query)
+		// preserve any 'type' or 'format' parameters if already present in Query (user may provide full endpoint)
+		streamURL := fmt.Sprintf("%s?%s", streamBase, values.Encode())
+
+		headers := map[string]string{}
+		if a.APIKey != "" {
+			headers["X-API-Key"] = a.APIKey
+		}
+
+		resp, err := sendRequest(ctx, http.MethodGet, streamURL, nil, headers)
+		if err == nil && resp != nil && resp.StatusCode == http.StatusOK {
+			// Decide extension: for audio use .m4a always per requirement; for video use .mp4
+			contentType := resp.Header.Get("Content-Type")
+			ext := ".m4a"
+			if strings.HasPrefix(contentType, "video/") {
+				ext = ".mp4"
+			} else {
+				// try to sniff from content-disposition or mime type
+				if cd := resp.Header.Get("Content-Disposition"); cd != "" {
+					_, params, _ := mime.ParseMediaType(cd)
+					if fn, ok := params["filename"]; ok {
+						ext = filepath.Ext(fn)
+						if ext == "" {
+							ext = ".m4a"
+						} else {
+							// normalize video container if mp4 present
+							if strings.EqualFold(ext, ".oga") || strings.EqualFold(ext, ".ogg") {
+								ext = ".m4a"
+							}
+						}
+					}
+				}
+			}
+
+			// try to extract video id for naming
+			videoID := ""
+			if yt := NewYouTubeData(a.Query); yt != nil {
+				videoID = yt.extractVideoID(a.Query)
+			}
+			if videoID == "" {
+				// fallback to use a sanitized base name
+				videoID = "stream_" + generateUniqueName("") // generateUniqueName returns with ext, pass empty ext then trim
+				// strip any dot if present
+				videoID = strings.TrimSuffix(videoID, ".")
+			}
+
+			// ensure downloads dir
+			targetPath := filepath.Join(config.Conf.DownloadsDir, videoID+ext)
+			if err := os.MkdirAll(filepath.Dir(targetPath), defaultDownloadDirPerm); err != nil {
+				_ = resp.Body.Close()
+				return "", fmt.Errorf("failed to create downloads directory: %w", err)
+			}
+
+			tmp := targetPath + ".part"
+			f, ferr := os.Create(tmp)
+			if ferr != nil {
+				_ = resp.Body.Close()
+				return "", fmt.Errorf("failed to create temp file: %w", ferr)
+			}
+
+			_, copyErr := io.Copy(f, resp.Body)
+			_ = f.Close()
+			_ = resp.Body.Close()
+			if copyErr != nil {
+				_ = os.Remove(tmp)
+				return "", fmt.Errorf("failed to write stream to file: %w", copyErr)
+			}
+
+			if err := os.Rename(tmp, targetPath); err != nil {
+				return "", fmt.Errorf("failed to rename temp file: %w", err)
+			}
+
+			return targetPath, nil
+		}
+		// if stream approach didn't work, continue to fallback
 	}
 
 	downloader, err := NewDownload(ctx, info)
