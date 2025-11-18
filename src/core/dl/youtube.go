@@ -286,18 +286,79 @@ func (y *YouTubeData) getCookieFile() string {
 // downloadWithApi downloads a track using the external API.
 // It returns the file path of the downloaded track or an error if the download fails.
 func (y *YouTubeData) downloadWithApi(ctx context.Context, videoID string, _ bool) (string, error) {
-	videoUrl := fmt.Sprintf("https://www.youtube.com/watch?v=%s", videoID)
-	api := NewApiData(videoUrl)
-	track, err := api.GetTrack(ctx)
+	// Build the stream URL using the configured api base and the original youtube URL (video id)
+	if y.ApiUrl == "" {
+		return "", errors.New("api url is not configured")
+	}
+
+	// Build provided example: {ApiUrl}/stream?url=https://youtu.be/{id}
+	streamBase := strings.TrimRight(y.ApiUrl, "/") + "/stream"
+	values := url.Values{}
+	videoURL := fmt.Sprintf("https://www.youtube.com/watch?v=%s", videoID)
+	values.Set("url", videoURL)
+	streamURL := fmt.Sprintf("%s?%s", streamBase, values.Encode())
+
+	headers := map[string]string{}
+	if y.APIKey != "" {
+		headers["X-API-Key"] = y.APIKey
+	}
+
+	resp, err := sendRequest(ctx, http.MethodGet, streamURL, nil, headers)
 	if err != nil {
 		return "", err
 	}
+	defer func(Body io.ReadCloser) {
+		_ = Body.Close()
+	}(resp.Body)
 
-	down, err := NewDownload(ctx, track)
-	if err != nil {
-		log.Println("Error creating download: " + err.Error())
-		return "", err
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("unexpected status code from api stream: %s", resp.Status)
 	}
 
-	return down.Process()
+	// Choose extension mapping: audio -> .m4a (even if API returns .oga), video -> .mp4
+	ct := resp.Header.Get("Content-Type")
+	ext := ".m4a"
+	if strings.HasPrefix(ct, "video/") {
+		ext = ".mp4"
+	} else {
+		// check content-disposition for filename ext
+		if cd := resp.Header.Get("Content-Disposition"); cd != "" {
+			if _, params, perr := mime.ParseMediaType(cd); perr == nil {
+				if fn, ok := params["filename"]; ok {
+					e := filepath.Ext(fn)
+					if e != "" {
+						// normalize oga/ogg to .m4a as requested
+						if strings.EqualFold(e, ".oga") || strings.EqualFold(e, ".ogg") {
+							ext = ".m4a"
+						} else {
+							ext = e
+						}
+					}
+				}
+			}
+		}
+	}
+
+	targetPath := filepath.Join(config.Conf.DownloadsDir, videoID+ext)
+	if err := os.MkdirAll(filepath.Dir(targetPath), defaultDownloadDirPerm); err != nil {
+		return "", fmt.Errorf("failed to create downloads dir: %w", err)
+	}
+
+	tmp := targetPath + ".part"
+	out, oerr := os.Create(tmp)
+	if oerr != nil {
+		return "", fmt.Errorf("failed to create temp file: %w", oerr)
+	}
+	_, copyErr := io.Copy(out, resp.Body)
+	_ = out.Close()
+	if copyErr != nil {
+		_ = os.Remove(tmp)
+		return "", fmt.Errorf("failed to save stream: %w", copyErr)
+	}
+
+	if err := os.Rename(tmp, targetPath); err != nil {
+		return "", fmt.Errorf("failed to rename temp file: %w", err)
+	}
+
+	return targetPath, nil
 }
