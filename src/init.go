@@ -10,13 +10,20 @@ package pkg
 
 import (
 	"ashokshau/tgmusic/src/config"
+	"ashokshau/tgmusic/src/core/db"
 	"ashokshau/tgmusic/src/handlers"
 	"ashokshau/tgmusic/src/vc"
+	"context"
 
 	tg "github.com/amarnathcjd/gogram/telegram"
 )
 
 func Init(client *tg.Client) error {
+	if err := db.InitDatabase(context.Background()); err != nil {
+		return err
+	}
+
+	// Then start the voice call clients
 	for _, session := range config.Conf.SessionStrings {
 		_, err := vc.Calls.StartClient(config.Conf.ApiId, config.Conf.ApiHash, session)
 		if err != nil {
@@ -24,7 +31,9 @@ func Init(client *tg.Client) error {
 		}
 	}
 
+	// Register handlers and load modules
 	vc.Calls.RegisterHandlers(client)
 	handlers.LoadModules(client)
+
 	return nil
 }

@@ -19,7 +19,7 @@ func (ctx *Context) connectCall(chatId int64, mediaDescription ntgcalls.MediaDes
 		ctx.waitConnMutex.Unlock()
 	}()
 	ctx.waitConnMutex.Lock()
-	ctx.waitConnect[chatId] = make(chan error)
+	ctx.waitConnect[chatId] = make(chan error, 1)
 	ctx.waitConnMutex.Unlock()
 	if chatId >= 0 {
 		defer func() {
@@ -242,5 +242,10 @@ func (ctx *Context) connectCall(chatId int64, mediaDescription ntgcalls.MediaDes
 	ctx.waitConnMutex.RLock()
 	ch := ctx.waitConnect[chatId]
 	ctx.waitConnMutex.RUnlock()
-	return <-ch
+	select {
+	case err := <-ch:
+		return err
+	case <-time.After(15 * time.Second):
+		return fmt.Errorf("timed out waiting for connection")
+	}
 }
