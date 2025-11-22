@@ -54,11 +54,12 @@ type PlatformTracks struct {
 }
 
 const (
-	Telegram = "telegram"
-	YouTube  = "youtube"
-	Spotify  = "spotify"
-	JioSaavn = "jiosaavn"
-	Apple    = "apple_music"
+	Telegram   = "telegram"
+	YouTube    = "youtube"
+	Spotify    = "spotify"
+	JioSaavn   = "jiosaavn"
+	Apple      = "apple_music"
+	DirectLink = "direct_link"
 )
 
 const (
@@ -66,3 +67,13 @@ const (
 	Everyone = "everyone"
 	Auth     = "auth"
 )
+
+// FFProbeFormat defines the structure for parsing the format information from ffprobe's JSON output.
+type FFProbeFormat struct {
+	Format struct {
+		Duration string `json:"duration"`
+		Tags     struct {
+			Title string `json:"title"`
+		} `json:"tags,omitempty"`
+	} `json:"format"`
+}

@@ -19,13 +19,6 @@ import (
 	tg "github.com/amarnathcjd/gogram/telegram"
 )
 
-// FFProbeFormat defines the structure for parsing the format information from ffprobe's JSON output.
-type FFProbeFormat struct {
-	Format struct {
-		Duration string `json:"duration"`
-	} `json:"format"`
-}
-
 // GetFileDur extracts the duration of a media file from a Telegram message.
 // It returns the duration in seconds or 0 if the media type is unsupported or has no duration.
 func GetFileDur(m *tg.NewMessage) int {
