@@ -49,7 +49,7 @@ func handlePlay(m *telegram.NewMessage, isVideo bool) error {
 
 	if queue := cache.ChatCache.GetQueue(chatID); len(queue) > 10 {
 		_, _ = m.Reply(lang.GetString(langCode, "play_queue_full"))
-		return telegram.EndGroup
+		return telegram.ErrEndGroup
 	}
 
 	isReply := m.IsReply()
@@ -92,7 +92,7 @@ func handlePlay(m *telegram.NewMessage, isVideo bool) error {
 		updater, err := m.Reply(lang.GetString(langCode, "play_searching"))
 		if err != nil {
 			logger.Warn("failed to send message: %v", err)
-			return telegram.EndGroup
+			return telegram.ErrEndGroup
 		}
 		return handleMultipleTracks(m, updater, tracks, chatID, isVideo, langCode)
 	}
@@ -117,13 +117,13 @@ func handlePlay(m *telegram.NewMessage, isVideo bool) error {
 
 	if url == "" && args == "" && (!isReply || !isValidMedia(rMsg)) {
 		_, _ = m.Reply(lang.GetString(langCode, "play_usage"), &telegram.SendOptions{ReplyMarkup: core.SupportKeyboard()})
-		return telegram.EndGroup
+		return telegram.ErrEndGroup
 	}
 
 	updater, err := m.Reply(lang.GetString(langCode, "play_searching"))
 	if err != nil {
 		logger.Warn("failed to send message: %v", err)
-		return telegram.EndGroup
+		return telegram.ErrEndGroup
 	}
 
 	if isReply && isValidMedia(rMsg) {
@@ -134,7 +134,7 @@ func handlePlay(m *telegram.NewMessage, isVideo bool) error {
 	if url != "" {
 		if !wrapper.IsValid() {
 			_, _ = updater.Edit(lang.GetString(langCode, "play_invalid_url"), &telegram.SendOptions{ReplyMarkup: core.SupportKeyboard()})
-			return telegram.EndGroup
+			return telegram.ErrEndGroup
 		}
 
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -142,12 +142,12 @@ func handlePlay(m *telegram.NewMessage, isVideo bool) error {
 		trackInfo, err := wrapper.GetInfo(ctx)
 		if err != nil {
 			_, _ = updater.Edit(fmt.Sprintf(lang.GetString(langCode, "play_fetch_error"), err.Error()))
-			return telegram.EndGroup
+			return telegram.ErrEndGroup
 		}
 
 		if trackInfo.Results == nil {
 			_, _ = updater.Edit(lang.GetString(langCode, "play_no_tracks_found"))
-			return telegram.EndGroup
+			return telegram.ErrEndGroup
 		}
 		return handleUrl(m, updater, trackInfo, chatID, isVideo, langCode)
 	}

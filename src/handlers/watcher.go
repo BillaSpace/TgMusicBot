@@ -38,7 +38,7 @@ func handleVoiceChatMessage(m *telegram.NewMessage) error {
 
 	action, ok := m.Action.(*telegram.MessageActionGroupCall)
 	if !ok {
-		return telegram.EndGroup
+		return telegram.ErrEndGroup
 	}
 
 	var message string
@@ -56,7 +56,7 @@ func handleVoiceChatMessage(m *telegram.NewMessage) error {
 		_, _ = m.Client.SendMessage(chatID, message)
 	}
 
-	return telegram.EndGroup
+	return telegram.ErrEndGroup
 }
 
 // handleParticipant handles participant updates.

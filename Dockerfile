@@ -1,4 +1,4 @@
-FROM golang:1.24.4 AS builder
+FROM golang:1.25-bookworm AS builder
 
 WORKDIR /app
 
@@ -14,6 +14,7 @@ COPY . .
 
 RUN go generate
 RUN CGO_ENABLED=1 go build -ldflags="-w -s" -o myapp .
+
 
 FROM debian:12-slim
 
@@ -39,7 +40,5 @@ RUN groupadd -g 1000 myuser && \
     chown -R myuser:myuser /app
 
 USER myuser
-
-WORKDIR /app
 
 ENTRYPOINT ["/app/myapp"]

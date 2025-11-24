@@ -120,14 +120,14 @@ func loggerHandler(m *telegram.NewMessage) error {
 	defer cancel()
 	if config.Conf.LoggerId == 0 {
 		_, _ = m.Reply("Please set LOGGER_ID in .env first.")
-		return telegram.EndGroup
+		return telegram.ErrEndGroup
 	}
 
 	loggerStatus := db.Instance.GetLoggerStatus(ctx, m.Client.Me().ID)
 	args := strings.ToLower(m.Args())
 	if len(args) == 0 {
 		_, _ = m.Reply(fmt.Sprintf("Usage: /logger [enable|disable|on|off]\nCurrent status: %t", loggerStatus))
-		return telegram.EndGroup
+		return telegram.ErrEndGroup
 	}
 
 	switch args {
@@ -141,5 +141,5 @@ func loggerHandler(m *telegram.NewMessage) error {
 		_, _ = m.Reply("Invalid argument. Use 'enable', 'disable', 'on', or 'off'.")
 	}
 
-	return telegram.EndGroup
+	return telegram.ErrEndGroup
 }

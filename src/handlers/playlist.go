@@ -41,7 +41,7 @@ func createPlaylistHandler(m *telegram.NewMessage) error {
 
 	if len(userPlaylists) >= 10 {
 		_, _ = m.Reply(fmt.Sprintf(lang.GetString(langCode, "playlist_create_limit"), 10))
-		return telegram.EndGroup
+		return telegram.ErrEndGroup
 	}
 
 	if len([]rune(args)) > 40 {
@@ -55,7 +55,7 @@ func createPlaylistHandler(m *telegram.NewMessage) error {
 	}
 
 	_, err = m.Reply(fmt.Sprintf(lang.GetString(langCode, "playlist_created"), args, playlistID))
-	return telegram.EndGroup
+	return telegram.ErrEndGroup
 }
 
 func deletePlaylistHandler(m *telegram.NewMessage) error {
@@ -226,11 +226,11 @@ func playlistInfoHandler(m *telegram.NewMessage) error {
 	owner, err := m.Client.GetUser(playlist.UserID)
 	if err != nil {
 		logger.Warn(err.Error())
-		return telegram.EndGroup
+		return telegram.ErrEndGroup
 	}
 
 	_, err = m.Reply(fmt.Sprintf(lang.GetString(langCode, "playlist_info"), playlist.Name, owner.FirstName, len(playlist.Songs), strings.Join(songs, "\n")))
-	return telegram.EndGroup
+	return telegram.ErrEndGroup
 }
 
 func myPlaylistsHandler(m *telegram.NewMessage) error {

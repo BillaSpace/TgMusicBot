@@ -28,13 +28,13 @@ var (
 func cancelBroadcastHandler(m *tg.NewMessage) error {
 	broadcastCancelFlag.Store(true)
 	_, _ = m.Reply("🚫 Broadcast cancelled.")
-	return tg.EndGroup
+	return tg.ErrEndGroup
 }
 
 func broadcastHandler(m *tg.NewMessage) error {
 	if broadcastInProgress.Load() {
 		_, _ = m.Reply("❗ A broadcast is already in progress. Please wait for it to complete or cancel it with /cancelbroadcast")
-		return tg.EndGroup
+		return tg.ErrEndGroup
 	}
 
 	broadcastInProgress.Store(true)
@@ -46,13 +46,13 @@ func broadcastHandler(m *tg.NewMessage) error {
 	reply, err := m.GetReplyMessage()
 	if err != nil {
 		_, _ = m.Reply("❗ Reply to a message to broadcast.\nExample:\n`/broadcast -copy -limit 100 -delay 2s optional preview text`")
-		return tg.EndGroup
+		return tg.ErrEndGroup
 	}
 
 	args := strings.Fields(m.Args())
 	if len(args) == 0 {
 		_, _ = m.Reply("Provide flags.\nExample: `/broadcast -copy -limit 50 -delay 1s`")
-		return tg.EndGroup
+		return tg.ErrEndGroup
 	}
 
 	copyMode := false
@@ -76,7 +76,7 @@ func broadcastHandler(m *tg.NewMessage) error {
 			n, err := strconv.Atoi(val)
 			if err != nil || n <= 0 {
 				_, _ = m.Reply("❗ Invalid limit value. Example: `-limit 100`")
-				return tg.EndGroup
+				return tg.ErrEndGroup
 			}
 			limit = n
 
@@ -86,7 +86,7 @@ func broadcastHandler(m *tg.NewMessage) error {
 			d, err := time.ParseDuration(val)
 			if err != nil {
 				_, _ = m.Reply("❗ Invalid delay. Example: `-delay 2s`")
-				return tg.EndGroup
+				return tg.ErrEndGroup
 			}
 			delay = d
 		}
@@ -106,7 +106,7 @@ func broadcastHandler(m *tg.NewMessage) error {
 
 	if len(targets) == 0 {
 		_, _ = m.Reply("❗ No targets found.")
-		return tg.EndGroup
+		return tg.ErrEndGroup
 	}
 
 	if limit > 0 && limit < len(targets) {
@@ -136,7 +136,7 @@ func broadcastHandler(m *tg.NewMessage) error {
 
 			for {
 				_, errSend := reply.ForwardTo(id, &tg.ForwardOptions{
-					Noforwards: copyMode,
+					HideAuthor: copyMode,
 				})
 
 				if errSend == nil {
@@ -193,5 +193,5 @@ func broadcastHandler(m *tg.NewMessage) error {
 
 	_, _ = sentMsg.Edit(result)
 	broadcastInProgress.Store(false)
-	return tg.EndGroup
+	return tg.ErrEndGroup
 }

@@ -12,6 +12,9 @@ import (
 	"log"
 	"time"
 
+	"net/http"
+	_ "net/http/pprof"
+
 	"ashokshau/tgmusic/src"
 	"ashokshau/tgmusic/src/config"
 	"ashokshau/tgmusic/src/lang"
@@ -28,6 +31,12 @@ func main() {
 	if err := config.LoadConfig(); err != nil {
 		panic(err)
 	}
+
+	go func() {
+		if err := http.ListenAndServe("0.0.0.0:"+config.Conf.Port, nil); err != nil {
+			log.Println("pprof server error:", err)
+		}
+	}()
 
 	err := lang.LoadTranslations()
 	if err != nil {
