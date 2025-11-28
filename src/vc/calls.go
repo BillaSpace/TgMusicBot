@@ -152,11 +152,13 @@ func (c *TelegramCalls) StartClient(apiID int32, apiHash, stringSession string) 
 	}
 
 	if mtProto.Me().Bot {
+		_ = mtProto.Stop()
 		return nil, fmt.Errorf("the client %s is a bot", clientName)
 	}
 
 	call, err := ubot.NewInstance(mtProto)
 	if err != nil {
+		_ = mtProto.Stop()
 		return nil, fmt.Errorf("failed to create the ubot instance: %w", err)
 	}
 
@@ -306,6 +308,7 @@ func (c *TelegramCalls) playSong(chatID int64, song *cache.CachedTrack) error {
 	if song.Duration == 0 {
 		song.Duration = cache.GetFileDuration(song.FilePath)
 	}
+
 	text := fmt.Sprintf(
 		lang.GetString(langCode, "now_playing_details"),
 		song.URL,
@@ -314,7 +317,12 @@ func (c *TelegramCalls) playSong(chatID int64, song *cache.CachedTrack) error {
 		song.User,
 	)
 
-	_, err = reply.Edit(text, &tg.SendOptions{ReplyMarkup: core.ControlButtons("play")})
+	thumb, _ := core.GenThumb(*song)
+
+	_, err = reply.Edit(text, &tg.SendOptions{
+		ReplyMarkup: core.ControlButtons("play"),
+		Media:       thumb,
+	})
 	if err != nil {
 		c.bot.Log.Warn("[playSong] Failed to edit message: %v", err)
 		return nil
