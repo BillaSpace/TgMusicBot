@@ -29,11 +29,29 @@ func handleVoiceChatMessage(m *telegram.NewMessage) error {
 
 	chatID := m.ChannelID()
 	ctx, cancel := db.Ctx()
+	client := m.Client
 	defer cancel()
 
 	langCode := "en"
 	if db.Instance != nil {
 		langCode = db.Instance.GetLang(ctx, chatID)
+	}
+
+	// Chat is not a Supergroup
+	if m.Channel == nil {
+		text := fmt.Sprintf(
+			lang.GetString(langCode, "watcher_not_supergroup"),
+			chatID,
+		)
+
+		_, _ = client.SendMessage(chatID, text, &telegram.SendOptions{
+			ReplyMarkup: core.AddMeMarkup(client.Me().Username),
+			LinkPreview: false,
+		})
+
+		time.Sleep(1 * time.Second)
+		_ = client.LeaveChannel(chatID)
+		return nil
 	}
 
 	action, ok := m.Action.(*telegram.MessageActionGroupCall)
@@ -344,11 +362,9 @@ func getStatusFromParticipant(p telegram.ChannelParticipant) string {
 func getChatType(ch *telegram.Channel) string {
 	if ch.Broadcast {
 		return "Broadcast Channel"
-	}
-	if ch.Megagroup {
+	} else if ch.Megagroup {
 		return "Supergroup"
-	}
-	if ch.Gigagroup {
+	} else if ch.Gigagroup {
 		return "Gigagroup"
 	}
 	return "Channel"
