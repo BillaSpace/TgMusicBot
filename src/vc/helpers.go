@@ -11,6 +11,7 @@ package vc
 import (
 	"context"
 	"fmt"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
@@ -178,8 +179,13 @@ func DownloadSong(ctx context.Context, song *cache.CachedTrack, bot *telegram.Cl
 		if err != nil {
 			return "", nil, err
 		}
+		
+		fileName := filepath.Join(config.Conf.DownloadsDir, song.Name)
+		if _, err := os.Stat(fileName); err == nil {
+			return fileName, nil, nil
+		}
 
-		filePath, err := bot.DownloadMedia(file, &telegram.DownloadOptions{FileName: filepath.Join(config.Conf.DownloadsDir, song.Name), Ctx: ctx})
+		filePath, err := bot.DownloadMedia(file, &telegram.DownloadOptions{FileName: fileName, Ctx: ctx})
 		return filePath, nil, err
 	}
 
