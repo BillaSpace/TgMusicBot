@@ -337,24 +337,32 @@ func (ctx *Client) CreateCall(chatId int64) (string, error) {
 	f := CreateFuture()
 	defer f.Free()
 	bufferPtr := (**C.char)(C.malloc(C.size_t(unsafe.Sizeof((*C.char)(nil)))))
+	*bufferPtr = nil
 	defer C.free(unsafe.Pointer(bufferPtr))
 	C.ntg_create(C.uintptr_t(ctx.ptr), C.int64_t(chatId), bufferPtr, f.ParseToC())
 	f.wait()
+	if err := parseErrorCode(f); err != nil {
+		return "", err
+	}
 	buffer := *bufferPtr
 	defer C.free(unsafe.Pointer(buffer))
-	return C.GoString(buffer), parseErrorCode(f)
+	return C.GoString(buffer), nil
 }
 
 func (ctx *Client) InitPresentation(chatId int64) (string, error) {
 	f := CreateFuture()
 	defer f.Free()
 	bufferPtr := (**C.char)(C.malloc(C.size_t(unsafe.Sizeof((*C.char)(nil)))))
+	*bufferPtr = nil
 	defer C.free(unsafe.Pointer(bufferPtr))
 	C.ntg_init_presentation(C.uintptr_t(ctx.ptr), C.int64_t(chatId), bufferPtr, f.ParseToC())
 	f.wait()
+	if err := parseErrorCode(f); err != nil {
+		return "", err
+	}
 	buffer := *bufferPtr
 	defer C.free(unsafe.Pointer(buffer))
-	return C.GoString(buffer), parseErrorCode(f)
+	return C.GoString(buffer), nil
 }
 
 func (ctx *Client) StopPresentation(chatId int64) error {
@@ -379,7 +387,10 @@ func (ctx *Client) AddIncomingVideo(chatId int64, endpoint string, ssrcGroups []
 
 	C.ntg_add_incoming_video(C.uintptr_t(ctx.ptr), C.int64_t(chatId), endpointC, groupsC, C.int(len(ssrcGroups)), bufferPtr, f.ParseToC())
 	f.wait()
-	return uint32(*bufferPtr), parseErrorCode(f)
+	if err := parseErrorCode(f); err != nil {
+		return 0, err
+	}
+	return uint32(*bufferPtr), nil
 }
 
 func (ctx *Client) RemoveIncomingVideo(chatId int64, endpoint string) error {
@@ -404,8 +415,10 @@ func (ctx *Client) CreateP2PCall(chatId int64) error {
 
 func (ctx *Client) InitExchange(chatId int64, dhConfig DhConfig, gAHash []byte) ([]byte, error) {
 	bufferPtr := (**C.uint8_t)(C.malloc(C.size_t(unsafe.Sizeof((*C.uint8_t)(nil)))))
+	*bufferPtr = nil
 	defer C.free(unsafe.Pointer(bufferPtr))
 	sizePtr := (*C.int)(C.malloc(C.size_t(unsafe.Sizeof(C.int(0)))))
+	*sizePtr = 0
 	defer C.free(unsafe.Pointer(sizePtr))
 
 	gAHashC, gAHashSize, cleanup := parseBytes(gAHash)
@@ -418,10 +431,13 @@ func (ctx *Client) InitExchange(chatId int64, dhConfig DhConfig, gAHash []byte) 
 	defer f.Free()
 	C.ntg_init_exchange(C.uintptr_t(ctx.ptr), C.int64_t(chatId), &dhConfigC, gAHashC, gAHashSize, bufferPtr, sizePtr, f.ParseToC())
 	f.wait()
+	if err := parseErrorCode(f); err != nil {
+		return nil, err
+	}
 	buffer := *bufferPtr
 	size := *sizePtr
 	defer C.free(unsafe.Pointer(buffer))
-	return C.GoBytes(unsafe.Pointer(buffer), size), parseErrorCode(f)
+	return C.GoBytes(unsafe.Pointer(buffer), size), nil
 }
 
 func (ctx *Client) ExchangeKeys(chatId int64, gAB []byte, fingerprint int64) (AuthParams, error) {
@@ -434,11 +450,14 @@ func (ctx *Client) ExchangeKeys(chatId int64, gAB []byte, fingerprint int64) (Au
 
 	C.ntg_exchange_keys(C.uintptr_t(ctx.ptr), C.int64_t(chatId), gABC, gABSize, C.int64_t(fingerprint), bufferPtr, f.ParseToC())
 	f.wait()
+	if err := parseErrorCode(f); err != nil {
+		return AuthParams{}, err
+	}
 	buffer := *bufferPtr
 	return AuthParams{
 		GAOrB:          C.GoBytes(unsafe.Pointer(buffer.g_a_or_b), buffer.sizeGAB),
 		KeyFingerprint: int64(buffer.key_fingerprint),
-	}, parseErrorCode(f)
+	}, nil
 }
 
 func (ctx *Client) SkipExchange(chatId int64, encryptionKey []byte, isOutgoing bool) error {
@@ -589,7 +608,10 @@ func (ctx *Client) Time(chatId int64, streamMode StreamMode) (uint64, error) {
 	defer C.free(unsafe.Pointer(bufferPtr))
 	C.ntg_time(C.uintptr_t(ctx.ptr), C.int64_t(chatId), streamMode.ParseToC(), bufferPtr, f.ParseToC())
 	f.wait()
-	return uint64(*bufferPtr), parseErrorCode(f)
+	if err := parseErrorCode(f); err != nil {
+		return 0, err
+	}
+	return uint64(*bufferPtr), nil
 }
 
 //goland:noinspection GoUnusedExportedFunction
@@ -611,7 +633,10 @@ func (ctx *Client) CpuUsage() (float64, error) {
 	defer C.free(unsafe.Pointer(bufferPtr))
 	C.ntg_cpu_usage(C.uintptr_t(ctx.ptr), bufferPtr, f.ParseToC())
 	f.wait()
-	return float64(*bufferPtr), parseErrorCode(f)
+	if err := parseErrorCode(f); err != nil {
+		return 0, err
+	}
+	return float64(*bufferPtr), nil
 }
 
 func (ctx *Client) EnableGLibLoop(enable bool) {
@@ -623,22 +648,30 @@ func (ctx *Client) Calls() map[int64]*CallInfo {
 	f := CreateFuture()
 	defer f.Free()
 	bufferPtr := (**C.ntg_call_info_struct)(C.malloc(C.size_t(unsafe.Sizeof((*C.ntg_call_info_struct)(nil)))))
+	*bufferPtr = nil
 	defer C.free(unsafe.Pointer(bufferPtr))
 	sizePtr := (*C.int)(C.malloc(C.size_t(unsafe.Sizeof(C.int(0)))))
+	*sizePtr = 0
 	defer C.free(unsafe.Pointer(sizePtr))
 
 	C.ntg_calls(C.uintptr_t(ctx.ptr), bufferPtr, sizePtr, f.ParseToC())
 	f.wait()
+	if err := parseErrorCode(f); err != nil {
+		return mapReturn
+	}
+
 	buffer := *bufferPtr
 	size := *sizePtr
-	for i := 0; i < int(size); i++ {
-		rawCall := *(*C.ntg_call_info_struct)(unsafe.Pointer(uintptr(unsafe.Pointer(buffer)) + uintptr(i)*unsafe.Sizeof(C.ntg_call_info_struct{})))
-		mapReturn[int64(rawCall.chatId)] = &CallInfo{
-			Playback: parseStreamStatus(rawCall.playback),
-			Capture:  parseStreamStatus(rawCall.capture),
+	if buffer != nil && size > 0 {
+		for i := 0; i < int(size); i++ {
+			rawCall := *(*C.ntg_call_info_struct)(unsafe.Pointer(uintptr(unsafe.Pointer(buffer)) + uintptr(i)*unsafe.Sizeof(C.ntg_call_info_struct{})))
+			mapReturn[int64(rawCall.chatId)] = &CallInfo{
+				Playback: parseStreamStatus(rawCall.playback),
+				Capture:  parseStreamStatus(rawCall.capture),
+			}
 		}
+		defer C.free(unsafe.Pointer(buffer))
 	}
-	defer C.free(unsafe.Pointer(buffer))
 	return mapReturn
 }
 
