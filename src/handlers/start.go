@@ -33,6 +33,7 @@ func pingHandler(m *telegram.NewMessage) error {
 	latency := time.Since(start).Milliseconds()
 	uptime := time.Since(startTime).Truncate(time.Second)
 	senders := m.Client.GetExportedSendersStatus()
+
 	response := fmt.Sprintf(
 		"<b>📊 System Performance Metrics</b>\n\n"+
 			"⏱️ <b>Bot Latency:</b> <code>%d ms</code>\n"+
@@ -52,16 +53,16 @@ func startHandler(m *telegram.NewMessage) error {
 	chatID := m.ChannelID()
 
 	if m.IsPrivate() {
-		go func(chatID int64) {
+		go func(id int64) {
 			ctx, cancel := db.Ctx()
 			defer cancel()
-			_ = db.Instance.AddUser(ctx, chatID)
+			_ = db.Instance.AddUser(ctx, id)
 		}(chatID)
 	} else {
-		go func(chatID int64) {
+		go func(id int64) {
 			ctx, cancel := db.Ctx()
 			defer cancel()
-			_ = db.Instance.AddChat(ctx, chatID)
+			_ = db.Instance.AddChat(ctx, id)
 		}(chatID)
 	}
 
@@ -69,13 +70,21 @@ func startHandler(m *telegram.NewMessage) error {
 	defer cancel()
 	langCode := db.Instance.GetLang(ctx, chatID)
 
-	text := fmt.Sprintf(lang.GetString(langCode, "start_text"), m.Sender.FirstName, bot.FirstName)
+	text := fmt.Sprintf(
+		lang.GetString(langCode, "start_text"),
+		m.Sender.FirstName,
+		bot.FirstName,
+	)
 
 	if m.IsPrivate() && config.Conf.StartImg != "" {
-		_, err := m.Client.SendPhoto(
-			config.Conf.StartImg,
+		_, err := m.Client.SendMessage(
+			m.Chat(),
+			"",
 			&telegram.SendOptions{
-				Caption:     text,
+				Media: &telegram.InputMediaPhoto{
+					File:    config.Conf.StartImg,
+					Caption: text,
+				},
 				ReplyMarkup: core.AddMeMarkup(bot.Username),
 			},
 		)
