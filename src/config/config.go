@@ -16,10 +16,8 @@ import (
 	"strings"
 )
 
-// Conf is the global configuration for the bot.
 var Conf *BotConfig
 
-// LoadConfig loads the configuration from environment variables and sets the global Conf.
 func LoadConfig() error {
 	envFiles := []string{".env.local", ".env"}
 	if err := loadEnvFiles(envFiles...); err != nil {
@@ -45,6 +43,7 @@ func LoadConfig() error {
 		DownloadsDir:      getEnvStr("DOWNLOADS_DIR", "/tmp/downloads"),
 		SupportGroup:      getEnvStr("SUPPORT_GROUP", "https://t.me/Apexdiscusion"),
 		SupportChannel:    getEnvStr("SUPPORT_CHANNEL", "https://t.me/ApexServers"),
+		StartImg:          os.Getenv("START_IMG"),
 		cookiesUrl:        processCookieURLs(os.Getenv("COOKIES_URL")),
 		Port:              getEnvStr("PORT", "6060"),
 	}
@@ -53,16 +52,9 @@ func LoadConfig() error {
 	if devsEnv != "" {
 		devsEnv = strings.ReplaceAll(devsEnv, "\n", " ")
 		devsEnv = strings.ReplaceAll(devsEnv, ",", " ")
-
 		for _, idStr := range strings.Fields(devsEnv) {
-			idStr = strings.TrimSpace(idStr)
-			if idStr == "" {
-				continue
-			}
-			if id, err := strconv.ParseInt(idStr, 10, 64); err == nil {
+			if id, err := strconv.ParseInt(strings.TrimSpace(idStr), 10, 64); err == nil {
 				Conf.DEVS = append(Conf.DEVS, id)
-			} else {
-				log.Printf("Invalid DEV ID '%s': %v", idStr, err)
 			}
 		}
 	}
