@@ -52,6 +52,7 @@ func startHandler(m *telegram.NewMessage) error {
 	bot := m.Client.Me()
 	chatID := m.ChannelID()
 
+	// Handle Database Updates (User or Chat)
 	if m.IsPrivate() {
 		go func(id int64) {
 			ctx, cancel := db.Ctx()
@@ -66,24 +67,29 @@ func startHandler(m *telegram.NewMessage) error {
 		}(chatID)
 	}
 
+	// Get Language
 	ctx, cancel := db.Ctx()
 	defer cancel()
 	langCode := db.Instance.GetLang(ctx, chatID)
 
+	// Format Start Message
 	text := fmt.Sprintf(
 		lang.GetString(langCode, "start_text"),
 		m.Sender.FirstName,
 		bot.FirstName,
 	)
 
+	// If private chat and image is set, send Media
 	if m.IsPrivate() && config.Conf.StartImg != "" {
 		_, err := m.Client.SendMedia(
-			chatID, 
-			config.Conf.StartImg, // The File (URL or Path)
-			&telegram.SendOptions{
-				Caption:      text,
-				ReplyMarkup:  core.AddMeMarkup(bot.Username),
-				ReplyToMsgID: m.ID, // This ensures it replies to the user's message
+			chatID,               // Chat ID
+			config.Conf.StartImg, // Media File/URL
+			&telegram.MediaOptions{
+				Caption:     text,
+				ReplyMarkup: core.AddMeMarkup(bot.Username),
+				ReplyTo: &telegram.InputReplyToMessage{
+					ReplyToMsgId: m.ID,
+				},
 			},
 		)
 		return err
