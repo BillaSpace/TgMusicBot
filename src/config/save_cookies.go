@@ -15,14 +15,29 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 const cookiesDr = "src/cookies"
 
-// fetchContent downloads content from Pastebin or Batbin.
-// It takes a URL as input.
-// It returns the content of the URL as a string and an error if any.
 func fetchContent(url string) (string, error) {
+	resp, err := http.Get(url)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusOK {
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return "", err
+		}
+		ct := strings.ToLower(resp.Header.Get("content-type"))
+		if strings.Contains(ct, "text") {
+			return string(body), nil
+		}
+	}
+
 	parts := strings.Split(strings.Trim(url, "/"), "/")
 	id := parts[len(parts)-1]
 
@@ -35,65 +50,80 @@ func fetchContent(url string) (string, error) {
 		rawURL = url
 	}
 
-	resp, err := http.Get(rawURL)
+	resp, err = http.Get(rawURL)
 	if err != nil {
-		return "", fmt.Errorf("failed to GET %s: %w", rawURL, err)
+		return "", err
 	}
-	defer func(Body io.ReadCloser) {
-		_ = Body.Close()
-	}(resp.Body)
+	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("unexpected status %d for %s", resp.StatusCode, rawURL)
+		return "", fmt.Errorf("unexpected status %d", resp.StatusCode)
 	}
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return "", fmt.Errorf("failed to read body from %s: %w", rawURL, err)
+		return "", err
 	}
 
 	return string(body), nil
 }
 
-// saveContent saves content to a file in /tmp and returns the file path.
-// It takes a URL and content as input.
-// It returns the file path and an error if any.
 func saveContent(url, content string) (string, error) {
 	parts := strings.Split(strings.Trim(url, "/"), "/")
 	filename := parts[len(parts)-1]
 	if filename == "" {
-		filename = "file_" + strings.ReplaceAll(strings.Split(strings.ReplaceAll(url, "/", "_"), "?")[0], "#", "")
+		filename = "cookies"
 	}
-	filename += ".txt"
+	if !strings.HasSuffix(filename, ".txt") {
+		filename += ".txt"
+	}
 
-	filePath := filepath.Join(cookiesDr, filename)
-	// #nosec G304
-	f, err := os.Create(filePath)
+	path := filepath.Join(cookiesDr, filename)
+	f, err := os.Create(path)
 	if err != nil {
-		return "", fmt.Errorf("failed to create file %s: %w", filePath, err)
+		return "", err
 	}
-	defer func(f *os.File) {
-		_ = f.Close()
-	}(f)
+	defer f.Close()
 
-	if _, err := f.WriteString(content); err != nil {
-		return "", fmt.Errorf("failed to write file %s: %w", filePath, err)
+	_, err = f.WriteString(content)
+	if err != nil {
+		return "", err
 	}
 
-	return filePath, nil
+	return path, nil
 }
 
-// saveAllCookies downloads all URLs and stores paths in Conf.CookiesPath.
-// It takes a slice of URLs as input.
+func isExpired(path string) bool {
+	info, err := os.Stat(path)
+	if err != nil {
+		return true
+	}
+	return time.Since(info.ModTime()) > 72*time.Hour
+}
+
 func saveAllCookies(urls []string) {
 	for _, url := range urls {
+		parts := strings.Split(strings.Trim(url, "/"), "/")
+		name := parts[len(parts)-1]
+		if !strings.HasSuffix(name, ".txt") {
+			name += ".txt"
+		}
+		path := filepath.Join(cookiesDr, name)
+
+		if !isExpired(path) {
+			Conf.CookiesPath = append(Conf.CookiesPath, path)
+			continue
+		}
+
+		_ = os.Remove(path)
+
 		content, err := fetchContent(url)
 		if err != nil {
 			fmt.Println("Error fetching:", err)
 			continue
 		}
 
-		path, err := saveContent(url, content)
+		path, err = saveContent(url, content)
 		if err != nil {
 			fmt.Println("Error saving:", err)
 			continue
