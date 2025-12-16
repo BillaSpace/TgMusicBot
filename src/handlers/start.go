@@ -88,7 +88,7 @@ func startHandler(m *telegram.NewMessage) error {
 				Caption:     text,
 				ReplyMarkup: core.AddMeMarkup(bot.Username),
 				ReplyTo: &telegram.InputReplyToMessage{
-					ReplyToMsgId: m.ID,
+					ReplyToMsgID: m.ID,
 				},
 			},
 		)
