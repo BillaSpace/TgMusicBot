@@ -38,6 +38,7 @@ type BotConfig struct {
 	SupportChannel    string   // SupportChannel is the Telegram channel link.
 	DEVS              []int64  // DEVS is a list of developer user IDs.
 	CookiesPath       []string // CookiesPath is a list of paths to cookies files.
+	StartImg          string   // Remote Url of the image shown along with start_text
 	cookiesUrl        []string // cookiesUrl is a list of URLs to cookies files.
 	Port              string
 }
