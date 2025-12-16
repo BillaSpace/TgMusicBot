@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"regexp"
 	"strings"
 
 	"ashokshau/tgmusic/src/core/cache"
@@ -60,7 +61,24 @@ type ytSearchResp struct {
 	} `json:"contents"`
 }
 
+var ytURL = regexp.MustCompile(`(?:v=|youtu\.be/|shorts/)([\w-]{11})`)
+
 func searchYouTube(query string) ([]cache.MusicTrack, error) {
+	if id := extractVideoID(query); id != "" {
+		return []cache.MusicTrack{
+			{
+				URL:      "https://www.youtube.com/watch?v=" + id,
+				ID:       id,
+				Name:     "Unknown",
+				Cover:    "",
+				Duration: 0,
+				Views:    "",
+				Channel:  "",
+				Platform: "youtube",
+			},
+		}, nil
+	}
+
 	payload := map[string]interface{}{
 		"context": map[string]interface{}{
 			"client": map[string]interface{}{
@@ -84,7 +102,7 @@ func searchYouTube(query string) ([]cache.MusicTrack, error) {
 	}
 
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("User-Agent", "Mozilla/5.0 (X11; Linux x86_64)")
+	req.Header.Set("User-Agent", "Mozilla/5.0")
 	req.Header.Set("Accept", "*/*")
 	req.Header.Set("Origin", "https://www.youtube.com")
 	req.Header.Set("Referer", "https://www.youtube.com/")
@@ -146,6 +164,14 @@ func searchYouTube(query string) ([]cache.MusicTrack, error) {
 	}
 
 	return tracks, nil
+}
+
+func extractVideoID(s string) string {
+	m := ytURL.FindStringSubmatch(s)
+	if len(m) > 1 {
+		return m[1]
+	}
+	return ""
 }
 
 func parseDuration(s string) int {
