@@ -14,15 +14,9 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"regexp"
 	"strings"
 
 	"ashokshau/tgmusic/src/core/cache"
-)
-
-var (
-	ytVideoID    = regexp.MustCompile(`(?:v=|youtu\.be/|shorts/)([\w-]{11})`)
-	ytPlaylistID = regexp.MustCompile(`(?:list=)([A-Za-z0-9_-]+)`)
 )
 
 type ytSearchResp struct {
@@ -33,30 +27,8 @@ type ytSearchResp struct {
 					Contents []struct {
 						ItemSectionRenderer struct {
 							Contents []struct {
-								VideoRenderer struct {
-									VideoID string `json:"videoId"`
-									Title   struct {
-										Runs []struct {
-											Text string `json:"text"`
-										} `json:"runs"`
-									} `json:"title"`
-									Thumbnail struct {
-										Thumbnails []struct {
-											URL string `json:"url"`
-										} `json:"thumbnails"`
-									} `json:"thumbnail"`
-									LengthText struct {
-										SimpleText string `json:"simpleText"`
-									} `json:"lengthText"`
-									ShortViewCountText struct {
-										SimpleText string `json:"simpleText"`
-									} `json:"shortViewCountText"`
-									OwnerText struct {
-										Runs []struct {
-											Text string `json:"text"`
-										} `json:"runs"`
-									} `json:"ownerText"`
-								} `json:"videoRenderer"`
+								VideoRenderer    *ytVideoRenderer    `json:"videoRenderer"`
+								PlaylistRenderer *ytPlaylistRenderer `json:"playlistRenderer"`
 							} `json:"contents"`
 						} `json:"itemSectionRenderer"`
 					} `json:"contents"`
@@ -66,25 +38,55 @@ type ytSearchResp struct {
 	} `json:"contents"`
 }
 
+type ytVideoRenderer struct {
+	VideoID string `json:"videoId"`
+	Title   struct {
+		Runs []struct {
+			Text string `json:"text"`
+		} `json:"runs"`
+	} `json:"title"`
+	Thumbnail struct {
+		Thumbnails []struct {
+			URL string `json:"url"`
+		} `json:"thumbnails"`
+	} `json:"thumbnail"`
+	LengthText struct {
+		SimpleText string `json:"simpleText"`
+	} `json:"lengthText"`
+	ShortViewCountText struct {
+		SimpleText string `json:"simpleText"`
+	} `json:"shortViewCountText"`
+	OwnerText struct {
+		Runs []struct {
+			Text string `json:"text"`
+		} `json:"runs"`
+	} `json:"ownerText"`
+}
+
+type ytPlaylistRenderer struct {
+	PlaylistID string `json:"playlistId"`
+	Title      struct {
+		Runs []struct {
+			Text string `json:"text"`
+		} `json:"runs"`
+	} `json:"title"`
+	Thumbnail struct {
+		Thumbnails []struct {
+			URL string `json:"url"`
+		} `json:"thumbnails"`
+	} `json:"thumbnail"`
+	ShortBylineText struct {
+		Runs []struct {
+			Text string `json:"text"`
+		} `json:"runs"`
+	} `json:"shortBylineText"`
+	VideoCount string `json:"videoCount"`
+}
+
 func searchYouTube(query string) ([]cache.MusicTrack, error) {
-	if extractPlaylistID(query) != "" {
-		return nil, fmt.Errorf("playlist URLs must be handled via yt-dlp, not search")
-	}
-
-	if id := extractVideoID(query); id != "" {
-		return []cache.MusicTrack{
-			{
-				URL:      "https://www.youtube.com/watch?v=" + id,
-				ID:       id,
-				Name:     "Unknown",
-				Platform: "youtube",
-			},
-		}, nil
-	}
-
-	payload := map[string]interface{}{
-		"context": map[string]interface{}{
-			"client": map[string]interface{}{
+	payload := map[string]any{
+		"context": map[string]any{
+			"client": map[string]any{
 				"clientName":    "WEB",
 				"clientVersion": "2.20241210.01.00",
 				"hl":            "en",
@@ -105,7 +107,7 @@ func searchYouTube(query string) ([]cache.MusicTrack, error) {
 	}
 
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("User-Agent", "Mozilla/5.0")
+	req.Header.Set("User-Agent", "Mozilla/5.0 (X11; Linux x86_64)")
 	req.Header.Set("Origin", "https://www.youtube.com")
 	req.Header.Set("Referer", "https://www.youtube.com/")
 
@@ -131,59 +133,41 @@ func searchYouTube(query string) ([]cache.MusicTrack, error) {
 
 	var tracks []cache.MusicTrack
 
-	for _, c := range data.Contents.TwoColumnSearchResultsRenderer.PrimaryContents.
-		SectionListRenderer.Contents {
+	for _, c := range data.Contents.TwoColumnSearchResultsRenderer.
+		PrimaryContents.SectionListRenderer.Contents {
+
 		for _, it := range c.ItemSectionRenderer.Contents {
-			v := it.VideoRenderer
-			if v.VideoID == "" {
+
+			if v := it.VideoRenderer; v != nil && v.VideoID != "" {
+				tracks = append(tracks, cache.MusicTrack{
+					ID:       v.VideoID,
+					URL:      "https://www.youtube.com/watch?v=" + v.VideoID,
+					Name:     textRun(v.Title.Runs),
+					Cover:    thumb(v.Thumbnail.Thumbnails),
+					Duration: parseDuration(v.LengthText.SimpleText),
+					Views:    v.ShortViewCountText.SimpleText,
+					Channel:  textRun(v.OwnerText.Runs),
+					Platform: "youtube",
+				})
 				continue
 			}
 
-			title := ""
-			if len(v.Title.Runs) > 0 {
-				title = v.Title.Runs[0].Text
+			if p := it.PlaylistRenderer; p != nil && p.PlaylistID != "" {
+				tracks = append(tracks, cache.MusicTrack{
+					ID:       p.PlaylistID,
+					URL:      "https://www.youtube.com/playlist?list=" + p.PlaylistID,
+					Name:     textRun(p.Title.Runs),
+					Cover:    thumb(p.Thumbnail.Thumbnails),
+					Duration: 0,
+					Views:    p.VideoCount + " videos",
+					Channel:  textRun(p.ShortBylineText.Runs),
+					Platform: "youtube",
+				})
 			}
-
-			thumb := ""
-			if len(v.Thumbnail.Thumbnails) > 0 {
-				thumb = v.Thumbnail.Thumbnails[0].URL
-			}
-
-			channel := ""
-			if len(v.OwnerText.Runs) > 0 {
-				channel = v.OwnerText.Runs[0].Text
-			}
-
-			tracks = append(tracks, cache.MusicTrack{
-				URL:      "https://www.youtube.com/watch?v=" + v.VideoID,
-				ID:       v.VideoID,
-				Name:     title,
-				Cover:    thumb,
-				Duration: parseDuration(v.LengthText.SimpleText),
-				Views:    v.ShortViewCountText.SimpleText,
-				Channel:  channel,
-				Platform: "youtube",
-			})
 		}
 	}
 
 	return tracks, nil
-}
-
-func extractVideoID(s string) string {
-	m := ytVideoID.FindStringSubmatch(s)
-	if len(m) > 1 {
-		return m[1]
-	}
-	return ""
-}
-
-func extractPlaylistID(s string) string {
-	m := ytPlaylistID.FindStringSubmatch(s)
-	if len(m) > 1 {
-		return m[1]
-	}
-	return ""
 }
 
 func parseDuration(s string) int {
@@ -208,4 +192,18 @@ func atoi(s string) int {
 		}
 	}
 	return n
+}
+
+func textRun(r []struct{ Text string }) string {
+	if len(r) > 0 {
+		return r[0].Text
+	}
+	return ""
+}
+
+func thumb(t []struct{ URL string }) string {
+	if len(t) > 0 {
+		return t[0].URL
+	}
+	return ""
 }
