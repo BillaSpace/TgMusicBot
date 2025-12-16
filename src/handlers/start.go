@@ -72,7 +72,7 @@ func startHandler(m *telegram.NewMessage) error {
 	text := fmt.Sprintf(lang.GetString(langCode, "start_text"), m.Sender.FirstName, bot.FirstName)
 
 	if m.IsPrivate() && config.Conf.StartImg != "" {
-		_, err := m.ReplyPhoto(
+		_, err := m.Client.SendPhoto(
 			config.Conf.StartImg,
 			&telegram.SendOptions{
 				Caption:     text,
