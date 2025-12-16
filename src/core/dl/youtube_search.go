@@ -20,6 +20,11 @@ import (
 	"ashokshau/tgmusic/src/core/cache"
 )
 
+var (
+	ytVideoID    = regexp.MustCompile(`(?:v=|youtu\.be/|shorts/)([\w-]{11})`)
+	ytPlaylistID = regexp.MustCompile(`(?:list=)([A-Za-z0-9_-]+)`)
+)
+
 type ytSearchResp struct {
 	Contents struct {
 		TwoColumnSearchResultsRenderer struct {
@@ -61,19 +66,17 @@ type ytSearchResp struct {
 	} `json:"contents"`
 }
 
-var ytURL = regexp.MustCompile(`(?:v=|youtu\.be/|shorts/)([\w-]{11})`)
-
 func searchYouTube(query string) ([]cache.MusicTrack, error) {
+	if extractPlaylistID(query) != "" {
+		return nil, fmt.Errorf("playlist URLs must be handled via yt-dlp, not search")
+	}
+
 	if id := extractVideoID(query); id != "" {
 		return []cache.MusicTrack{
 			{
 				URL:      "https://www.youtube.com/watch?v=" + id,
 				ID:       id,
 				Name:     "Unknown",
-				Cover:    "",
-				Duration: 0,
-				Views:    "",
-				Channel:  "",
 				Platform: "youtube",
 			},
 		}, nil
@@ -103,7 +106,6 @@ func searchYouTube(query string) ([]cache.MusicTrack, error) {
 
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("User-Agent", "Mozilla/5.0")
-	req.Header.Set("Accept", "*/*")
 	req.Header.Set("Origin", "https://www.youtube.com")
 	req.Header.Set("Referer", "https://www.youtube.com/")
 
@@ -136,26 +138,28 @@ func searchYouTube(query string) ([]cache.MusicTrack, error) {
 			if v.VideoID == "" {
 				continue
 			}
+
 			title := ""
 			if len(v.Title.Runs) > 0 {
 				title = v.Title.Runs[0].Text
 			}
+
 			thumb := ""
 			if len(v.Thumbnail.Thumbnails) > 0 {
 				thumb = v.Thumbnail.Thumbnails[0].URL
 			}
+
 			channel := ""
 			if len(v.OwnerText.Runs) > 0 {
 				channel = v.OwnerText.Runs[0].Text
 			}
-			duration := parseDuration(v.LengthText.SimpleText)
 
 			tracks = append(tracks, cache.MusicTrack{
 				URL:      "https://www.youtube.com/watch?v=" + v.VideoID,
 				ID:       v.VideoID,
 				Name:     title,
 				Cover:    thumb,
-				Duration: duration,
+				Duration: parseDuration(v.LengthText.SimpleText),
 				Views:    v.ShortViewCountText.SimpleText,
 				Channel:  channel,
 				Platform: "youtube",
@@ -167,7 +171,15 @@ func searchYouTube(query string) ([]cache.MusicTrack, error) {
 }
 
 func extractVideoID(s string) string {
-	m := ytURL.FindStringSubmatch(s)
+	m := ytVideoID.FindStringSubmatch(s)
+	if len(m) > 1 {
+		return m[1]
+	}
+	return ""
+}
+
+func extractPlaylistID(s string) string {
+	m := ytPlaylistID.FindStringSubmatch(s)
 	if len(m) > 1 {
 		return m[1]
 	}
