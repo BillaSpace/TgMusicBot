@@ -77,23 +77,20 @@ func startHandler(m *telegram.NewMessage) error {
 	)
 
 	if m.IsPrivate() && config.Conf.StartImg != "" {
-		_, err := m.Client.SendFile(
-			chatID,
-			config.Conf.StartImg,
+		_, err := m.Client.SendMedia(
+			chatID, 
+			config.Conf.StartImg, // The File (URL or Path)
 			&telegram.SendOptions{
-				Caption:     text,
-				ReplyTo:     m.ID,
-				ReplyMarkup: core.AddMeMarkup(bot.Username),
+				Caption:      text,
+				ReplyMarkup:  core.AddMeMarkup(bot.Username),
+				ReplyToMsgID: m.ID, // This ensures it replies to the user's message
 			},
 		)
 		return err
 	}
 
-	_, err := m.Reply(
-		text,
-		&telegram.SendOptions{
-			ReplyMarkup: core.AddMeMarkup(bot.Username),
-		},
-	)
+	_, err := m.Reply(text, &telegram.SendOptions{
+		ReplyMarkup: core.AddMeMarkup(bot.Username),
+	})
 	return err
 }
