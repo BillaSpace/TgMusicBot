@@ -13,6 +13,7 @@ import (
 	"runtime"
 	"time"
 
+	"ashokshau/tgmusic/src/config"
 	"ashokshau/tgmusic/src/core"
 	"ashokshau/tgmusic/src/core/db"
 	"ashokshau/tgmusic/src/lang"
@@ -20,7 +21,6 @@ import (
 	"github.com/amarnathcjd/gogram/telegram"
 )
 
-// pingHandler handles the /ping command.
 func pingHandler(m *telegram.NewMessage) error {
 	start := time.Now()
 	updateLag := time.Since(time.Unix(int64(m.Date()), 0)).Milliseconds()
@@ -47,7 +47,6 @@ func pingHandler(m *telegram.NewMessage) error {
 	return err
 }
 
-// startHandler handles the /start command.
 func startHandler(m *telegram.NewMessage) error {
 	bot := m.Client.Me()
 	chatID := m.ChannelID()
@@ -70,10 +69,21 @@ func startHandler(m *telegram.NewMessage) error {
 	defer cancel()
 	langCode := db.Instance.GetLang(ctx, chatID)
 
-	response := fmt.Sprintf(lang.GetString(langCode, "start_text"), m.Sender.FirstName, bot.FirstName)
-	_, err := m.Reply(response, &telegram.SendOptions{
-		ReplyMarkup: core.AddMeMarkup(m.Client.Me().Username),
-	})
+	text := fmt.Sprintf(lang.GetString(langCode, "start_text"), m.Sender.FirstName, bot.FirstName)
 
+	if m.IsPrivate() && config.Conf.StartImg != "" {
+		_, err := m.ReplyPhoto(
+			config.Conf.StartImg,
+			&telegram.SendOptions{
+				Caption:     text,
+				ReplyMarkup: core.AddMeMarkup(bot.Username),
+			},
+		)
+		return err
+	}
+
+	_, err := m.Reply(text, &telegram.SendOptions{
+		ReplyMarkup: core.AddMeMarkup(bot.Username),
+	})
 	return err
 }
