@@ -77,8 +77,7 @@ func startHandler(m *telegram.NewMessage) error {
 	)
 
 	if m.IsPrivate() && config.Conf.StartImg != "" {
-		_, err := m.Client.SendFile(
-			m.Chat,
+		_, err := m.ReplyFile(
 			config.Conf.StartImg,
 			&telegram.SendOptions{
 				Caption:     text,
