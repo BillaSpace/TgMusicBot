@@ -19,6 +19,14 @@ import (
 	"ashokshau/tgmusic/src/core/cache"
 )
 
+type ytTextRun struct {
+	Text string `json:"text"`
+}
+
+type ytThumb struct {
+	URL string `json:"url"`
+}
+
 type ytSearchResp struct {
 	Contents struct {
 		TwoColumnSearchResultsRenderer struct {
@@ -40,46 +48,43 @@ type ytSearchResp struct {
 
 type ytVideoRenderer struct {
 	VideoID string `json:"videoId"`
-	Title   struct {
-		Runs []struct {
-			Text string `json:"text"`
-		} `json:"runs"`
+
+	Title struct {
+		Runs []ytTextRun `json:"runs"`
 	} `json:"title"`
+
 	Thumbnail struct {
-		Thumbnails []struct {
-			URL string `json:"url"`
-		} `json:"thumbnails"`
+		Thumbnails []ytThumb `json:"thumbnails"`
 	} `json:"thumbnail"`
+
 	LengthText struct {
 		SimpleText string `json:"simpleText"`
 	} `json:"lengthText"`
+
 	ShortViewCountText struct {
 		SimpleText string `json:"simpleText"`
 	} `json:"shortViewCountText"`
+
 	OwnerText struct {
-		Runs []struct {
-			Text string `json:"text"`
-		} `json:"runs"`
+		Runs []ytTextRun `json:"runs"`
 	} `json:"ownerText"`
 }
 
 type ytPlaylistRenderer struct {
 	PlaylistID string `json:"playlistId"`
-	Title      struct {
-		Runs []struct {
-			Text string `json:"text"`
-		} `json:"runs"`
+
+	Title struct {
+		Runs []ytTextRun `json:"runs"`
 	} `json:"title"`
+
 	Thumbnail struct {
-		Thumbnails []struct {
-			URL string `json:"url"`
-		} `json:"thumbnails"`
+		Thumbnails []ytThumb `json:"thumbnails"`
 	} `json:"thumbnail"`
+
 	ShortBylineText struct {
-		Runs []struct {
-			Text string `json:"text"`
-		} `json:"runs"`
+		Runs []ytTextRun `json:"runs"`
 	} `json:"shortBylineText"`
+
 	VideoCount string `json:"videoCount"`
 }
 
@@ -96,11 +101,12 @@ func searchYouTube(query string) ([]cache.MusicTrack, error) {
 		"query": query,
 	}
 
-	b, _ := json.Marshal(payload)
+	body, _ := json.Marshal(payload)
+
 	req, err := http.NewRequest(
 		"POST",
 		"https://www.youtube.com/youtubei/v1/search?prettyPrint=false",
-		bytes.NewReader(b),
+		bytes.NewReader(body),
 	)
 	if err != nil {
 		return nil, err
@@ -108,6 +114,7 @@ func searchYouTube(query string) ([]cache.MusicTrack, error) {
 
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("User-Agent", "Mozilla/5.0 (X11; Linux x86_64)")
+	req.Header.Set("Accept", "*/*")
 	req.Header.Set("Origin", "https://www.youtube.com")
 	req.Header.Set("Referer", "https://www.youtube.com/")
 
@@ -121,24 +128,29 @@ func searchYouTube(query string) ([]cache.MusicTrack, error) {
 		return nil, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
 	}
 
-	body, err := io.ReadAll(resp.Body)
+	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err
 	}
 
 	var data ytSearchResp
-	if err := json.Unmarshal(body, &data); err != nil {
+	if err := json.Unmarshal(respBody, &data); err != nil {
 		return nil, err
 	}
 
 	var tracks []cache.MusicTrack
 
-	for _, c := range data.Contents.TwoColumnSearchResultsRenderer.
-		PrimaryContents.SectionListRenderer.Contents {
+	sections :=
+		data.Contents.
+			TwoColumnSearchResultsRenderer.
+			PrimaryContents.
+			SectionListRenderer.
+			Contents
 
-		for _, it := range c.ItemSectionRenderer.Contents {
+	for _, section := range sections {
+		for _, item := range section.ItemSectionRenderer.Contents {
 
-			if v := it.VideoRenderer; v != nil && v.VideoID != "" {
+			if v := item.VideoRenderer; v != nil && v.VideoID != "" {
 				tracks = append(tracks, cache.MusicTrack{
 					ID:       v.VideoID,
 					URL:      "https://www.youtube.com/watch?v=" + v.VideoID,
@@ -152,7 +164,7 @@ func searchYouTube(query string) ([]cache.MusicTrack, error) {
 				continue
 			}
 
-			if p := it.PlaylistRenderer; p != nil && p.PlaylistID != "" {
+			if p := item.PlaylistRenderer; p != nil && p.PlaylistID != "" {
 				tracks = append(tracks, cache.MusicTrack{
 					ID:       p.PlaylistID,
 					URL:      "https://www.youtube.com/playlist?list=" + p.PlaylistID,
@@ -174,13 +186,16 @@ func parseDuration(s string) int {
 	if s == "" {
 		return 0
 	}
+
 	parts := strings.Split(s, ":")
 	total := 0
-	m := 1
+	multiplier := 1
+
 	for i := len(parts) - 1; i >= 0; i-- {
-		total += atoi(parts[i]) * m
-		m *= 60
+		total += atoi(parts[i]) * multiplier
+		multiplier *= 60
 	}
+
 	return total
 }
 
@@ -194,14 +209,14 @@ func atoi(s string) int {
 	return n
 }
 
-func textRun(r []struct{ Text string }) string {
+func textRun(r []ytTextRun) string {
 	if len(r) > 0 {
 		return r[0].Text
 	}
 	return ""
 }
 
-func thumb(t []struct{ URL string }) string {
+func thumb(t []ytThumb) string {
 	if len(t) > 0 {
 		return t[0].URL
 	}
