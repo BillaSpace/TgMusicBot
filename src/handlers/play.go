@@ -54,7 +54,7 @@ func handlePlay(m *telegram.NewMessage, isVideo bool) error {
 
 	isReply := m.IsReply()
 	url := getUrl(m, isReply)
-	args := strings.TrimSpace(strings.TrimPrefix(m.Text(), m.Command()))
+	args := m.Args()
 	rMsg := m
 	var err error
 
