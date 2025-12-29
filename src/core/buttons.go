@@ -16,27 +16,27 @@ import (
 	"github.com/amarnathcjd/gogram/telegram"
 )
 
-var CloseBtn = telegram.Button.Data("❌ ᴄʟᴏꜱᴇ", "vcplay_close")
+var CloseBtn = telegram.Button.Data("Close", "vcplay_close")
 
-var HomeBtn = telegram.Button.Data("🏠 ʜᴏᴍᴇ", "help_back")
+var HomeBtn = telegram.Button.Data("Home", "help_back")
 
-var HelpBtn = telegram.Button.Data("📖 ʜᴇʟᴘ & ᴄᴏᴍᴍᴀɴᴅꜱ", "help_all")
+var HelpBtn = telegram.Button.Data("Help", "help_all")
 
-var UserBtn = telegram.Button.Data("👤 ᴜꜱᴇʀꜱ", "help_user")
+var UserBtn = telegram.Button.Data("Users", "help_user")
 
-var AdminBtn = telegram.Button.Data("🛡 ᴀᴅᴍɪɴꜱ", "help_admin")
+var AdminBtn = telegram.Button.Data("Admins", "help_admin")
 
-var OwnerBtn = telegram.Button.Data("👑 ᴏᴡɴᴇʀ", "help_owner")
+var OwnerBtn = telegram.Button.Data("Owner", "help_owner")
 
-var DevsBtn = telegram.Button.Data("‍💻 ᴅᴇᴠꜱ", "help_devs")
+var DevsBtn = telegram.Button.Data("Devs", "help_devs")
 
-var PlaylistBtn = telegram.Button.Data("🎶 ᴘʟᴀʏʟɪꜱᴛ", "help_playlist")
+var PlaylistBtn = telegram.Button.Data("Playlist", "help_playlist")
 
-var SourceCodeBtn = telegram.Button.URL("💻 ꜱᴏᴜʀᴄᴇ", "https://github.com/AshokShau/TgMusicBot")
+var SourceCodeBtn = telegram.Button.URL("Source Code", "https://github.com/AshokShau/TgMusicBot")
 
 func SupportKeyboard() *telegram.ReplyInlineMarkup {
-	channelBtn := telegram.Button.URL("ᴜᴘᴅᴀᴛᴇꜱ", config.Conf.SupportChannel)
-	groupBtn := telegram.Button.URL("ꜱᴜᴘᴘᴏʀᴛ", config.Conf.SupportGroup)
+	channelBtn := telegram.Button.URL("Updates", config.Conf.SupportChannel)
+	groupBtn := telegram.Button.URL("Group", config.Conf.SupportGroup)
 	keyboard := telegram.NewKeyboard().
 		AddRow(channelBtn, groupBtn).
 		AddRow(CloseBtn)
@@ -76,10 +76,9 @@ func SettingsKeyboard(playMode, adminMode string) *telegram.ReplyInlineMarkup {
 
 func HelpMenuKeyboard() *telegram.ReplyInlineMarkup {
 	keyboard := telegram.NewKeyboard().
-		AddRow(UserBtn, AdminBtn).
-		AddRow(OwnerBtn, DevsBtn).
-		AddRow(PlaylistBtn).
-		AddRow(CloseBtn, HomeBtn)
+		AddRow(UserBtn, AdminBtn, OwnerBtn).
+		AddRow(PlaylistBtn, DevsBtn, CloseBtn).
+		AddRow(HomeBtn)
 
 	return keyboard.Build()
 }
@@ -99,7 +98,7 @@ func ControlButtons(mode string) *telegram.ReplyInlineMarkup {
 	resumeBtn := telegram.Button.Data("▷", "play_resume")
 	muteBtn := telegram.Button.Data("🔇", "play_mute")
 	unmuteBtn := telegram.Button.Data("🔊", "play_unmute")
-	addToPlaylistBtn := telegram.Button.Data("➕ Playlist", "play_add_to_list")
+	addToPlaylistBtn := telegram.Button.Data("➕", "play_add_to_list")
 
 	var keyboard *telegram.KeyboardBuilder
 
@@ -123,12 +122,13 @@ func ControlButtons(mode string) *telegram.ReplyInlineMarkup {
 
 func AddMeMarkup(username string) *telegram.ReplyInlineMarkup {
 	addMeBtn := telegram.Button.URL(fmt.Sprintf("Aᴅᴅ ᴍᴇ ᴛᴏ ʏᴏᴜʀ ɢʀᴏᴜᴘ"), fmt.Sprintf("https://t.me/%s?startgroup=true", username))
-	channelBtn := telegram.Button.URL("ᴜᴘᴅᴀᴛᴇꜱ", config.Conf.SupportChannel)
-	groupBtn := telegram.Button.URL("ꜱᴜᴘᴘᴏʀᴛ", config.Conf.SupportGroup)
+	channelBtn := telegram.Button.URL("Updates", config.Conf.SupportChannel)
+	groupBtn := telegram.Button.URL("Group", config.Conf.SupportGroup)
 	keyboard := telegram.NewKeyboard().
 		AddRow(addMeBtn).
-		AddRow(HelpBtn, SourceCodeBtn).
-		AddRow(channelBtn, groupBtn)
+		AddRow(HelpBtn).
+		AddRow(channelBtn, groupBtn).
+		AddRow(SourceCodeBtn)
 
 	return keyboard.Build()
 }
