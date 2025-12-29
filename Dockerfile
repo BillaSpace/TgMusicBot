@@ -1,51 +1,53 @@
-FROM golang:1.25-bookworm AS builder
+FROM golang:1.25.4-bookworm AS builder
 
-WORKDIR /src
+WORKDIR /app
 
-RUN apt-get update && apt-get install -y --no-install-recommends gcc zlib1g-dev && \
-    rm -rf /var/lib/apt/lists/*
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+    gcc \
+    zlib1g-dev \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
 
 COPY go.mod go.sum ./
 RUN go mod download
 
 COPY . .
-
 RUN go generate
+RUN CGO_ENABLED=1 GOOS=linux go build -ldflags="-w -s" -o main .
 
-RUN CGO_ENABLED=1 GOOS=linux go build -ldflags="-w -s" -o app .
-
-
-FROM debian:12-slim
-
-WORKDIR /app
+FROM debian:12-slim AS runtime
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
-    ca-certificates \
-    zlib1g \
     wget \
+    unzip \
     curl \
-    unzip && \
-    rm -rf /var/lib/apt/lists/*
+    lsb-release \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
 
+RUN wget -O /usr/local/bin/yt-dlp \
+    https://github.com/yt-dlp/yt-dlp-nightly-builds/releases/latest/download/yt-dlp_linux \
+    && chmod +x /usr/local/bin/yt-dlp
 
-RUN wget -q -O /usr/local/bin/yt-dlp \
-      https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_linux && \
-    chmod +x /usr/local/bin/yt-dlp
+RUN curl -fsSL https://deno.land/install.sh | sh \
+    && export DENO_INSTALL="/opt/deno" \
+    && export PATH="$DENO_INSTALL/bin:$PATH" \
+    && mv /root/.deno /opt/deno \
+    && ln -sf /opt/deno/bin/deno /usr/local/bin/deno
 
+RUN groupadd -r app && useradd -r -g app -m -d /home/app app
 
-RUN curl -fsSL https://deno.land/install.sh | DENO_INSTALL="/home/app/.deno" sh
-ENV PATH="/home/app/.deno/bin:${PATH}"
+ENV DENO_INSTALL="/opt/deno"
+ENV PATH="${DENO_INSTALL}/bin:${PATH}"
+ENV HOME="/home/app"
 
-RUN useradd -m -u 1000 app
+COPY --from=builder --chown=app:app /app/main /usr/local/bin/app
 
-COPY --from=builder /src/app /app/app
-COPY --from=builder /src/config /app/config
-
-RUN chmod +x /app/app && \
-    chown -R app:app /app
+RUN chown -R app:app /opt/deno
 
 USER app
 
-WORKDIR /app
-ENTRYPOINT ["/app/app"]
+WORKDIR /home/app
+ENTRYPOINT ["app"]
