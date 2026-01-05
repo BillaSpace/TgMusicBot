@@ -62,6 +62,7 @@ const (
 	Deezer     = "Deezer"
 	Gaana      = "Gaana"
 	DirectLink = "direct_link"
+	Tidal      = "tidal"
 )
 
 const (
