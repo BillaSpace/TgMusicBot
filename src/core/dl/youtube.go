@@ -162,6 +162,7 @@ func (y *YouTubeData) GetTrack(ctx context.Context) (utils.TrackInfo, error) {
 
 	track := getInfo.Results[0]
 	trackInfo := utils.TrackInfo{
+		Id:       track.Id,
 		URL:      track.Url,
 		Platform: utils.YouTube,
 	}
