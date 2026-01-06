@@ -11,7 +11,6 @@ package ubot
 import (
 	"ashokshau/tgmusic/src/vc/ntgcalls"
 	"ashokshau/tgmusic/src/vc/ubot/types"
-	"encoding/json"
 	"fmt"
 	"slices"
 	"time"
@@ -226,7 +225,7 @@ func (ctx *Context) handleUpdates() {
 					for id, inputCall := range ctx.inputGroupCalls {
 						if obj, ok := inputCall.(*tg.InputGroupCallObj); ok && obj.ID == callID {
 							chatID = id
-							ctx.App.Log.Infof("Update group call %v %v", chatID, callID)
+							ctx.App.Log.Debugf("Received UpdateGroupCall with nil Peer and resolved:%v", chatID)
 							break
 						}
 					}
@@ -235,8 +234,10 @@ func (ctx *Context) handleUpdates() {
 			}
 
 			if chatID == 0 {
-				raw, _ := json.MarshalIndent(m, "", "  ")
-				ctx.App.Log.Errorf("Received UpdateGroupCall with nil Peer and unknown call ID:%s", string(raw))
+				/*
+					raw, _ := json.MarshalIndent(m, "", "  ")
+					ctx.App.Log.Debugf("Received UpdateGroupCall with nil Peer and unknown call ID:%s", string(raw))
+				*/
 				return nil
 			}
 
@@ -256,6 +257,8 @@ func (ctx *Context) handleUpdates() {
 				ctx.inputGroupCallsMutex.Unlock()
 				_ = ctx.binding.Stop(chatID)
 				return nil
+			default:
+				ctx.App.Log.Warnf("Received UpdateGroupCall with unknown type:%v", groupCallRaw)
 			}
 		}
 		return nil
