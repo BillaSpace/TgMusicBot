@@ -363,18 +363,19 @@ func handleMultipleTracks(m *telegram.NewMessage, updater *telegram.NewMessage, 
 		totalDuration += track.Duration
 	}
 
+	sb.WriteString("</blockquote>")
 	queueSummary := fmt.Sprintf(
-		"</blockquote>\n<b>📋 Queue Total:</b> %d\n<b>⏱ Duration:</b> %s\n<b>👤 By:</b> %s",
+		"\n<b>📋 Queue Total:</b> %d\n<b>⏱ Duration:</b> %s\n<b>👤 By:</b> %s",
 		qLenAfter, utils.SecToMin(totalDuration), m.Sender.FirstName,
 	)
 
 	sb.WriteString(queueSummary)
-
 	if len(skippedTracks) > 0 {
 		fmt.Fprintf(&sb, "\n\n<b>Skipped %d tracks</b> (exceeded duration limit).", len(skippedTracks))
 	}
 
 	fullMessage := sb.String()
+
 	if len(fullMessage) > 4096 {
 		fullMessage = queueSummary
 	}
