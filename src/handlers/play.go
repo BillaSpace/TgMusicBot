@@ -99,7 +99,7 @@ func handlePlay(m *telegram.NewMessage, isVideo bool) error {
 		return telegram.ErrEndGroup
 	}
 
-	updater, err := m.Reply("🔍 Searching...")
+	updater, err := m.Reply("🔍 Searching and downloading...")
 	if err != nil {
 		logger.Warn("failed to send message: %v", err)
 		return telegram.ErrEndGroup
@@ -265,11 +265,6 @@ func handleSingleTrack(m *telegram.NewMessage, updater *telegram.NewMessage, son
 	}
 
 	if saveCache.FilePath == "" {
-		_, err := updater.Edit(fmt.Sprintf("Downloading %s...", song.Title))
-		if err != nil {
-			logger.Warn("Edit message failed: %v", err)
-		}
-
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 		defer cancel()
 
